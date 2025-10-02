@@ -17,6 +17,17 @@
       flex-direction: column;
     }
     
+    /* Header banner */
+    .header-banner {
+      width: 100%;
+      height: 150px;
+      background-image: url('https://raw.githubusercontent.com/PROTONORD/meshtracking_no/main/assets/header.jpg');
+      background-size: cover;
+      background-position: center;
+      flex-shrink: 0;
+      border-bottom: 2px solid #ddd;
+    }
+    
     /* Top bar - favorites and legend */
     .top-bar {
       background: #fff;
@@ -294,6 +305,9 @@
 </head>
 <body>
   <div id="loading" class="loading">Laster kart...</div>
+  
+  <!-- Header banner -->
+  <div class="header-banner"></div>
   
   <!-- Top bar with favorites and legend -->
   <div class="top-bar">
