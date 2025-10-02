@@ -1,2 +1,2 @@
 # meshtracking_no
-Side for å kunne finne informasjon og gps posisjon på meshtastic noder. 
+lokalhostet webside for å kunne finne informasjon og gps posisjon på meshtastic noder. 
