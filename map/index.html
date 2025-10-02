@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Meshtastic Kart</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    * { box-sizing: border-box; }
+    html, body { 
+      height: 100%; 
+      margin: 0; 
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    /* Top bar - favorites and legend */
+    .top-bar {
+      background: #fff;
+      border-bottom: 1px solid #ddd;
+      z-index: 1000;
+      flex-shrink: 0;
+    }
+    
+    .favorites-bar {
+      padding: 8px 10px;
+      border-bottom: 1px solid #f0f0f0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+    
+    .favorites-bar:empty {
+      display: none;
+    }
+    
+    .favorites-bar .fav-label {
+      font-size: 0.85em;
+      font-weight: 600;
+      color: #666;
+      margin-right: 4px;
+    }
+    
+    .favorites-bar .fav-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #e3f2fd;
+      color: #1976d2;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 0.85em;
+      cursor: pointer;
+      border: 1px solid #90caf9;
+    }
+    
+    .favorites-bar .fav-chip:hover {
+      background: #bbdefb;
+    }
+    
+    .favorites-bar .remove-fav {
+      margin-left: 4px;
+      opacity: 0.6;
+    }
+    
+    .favorites-bar .remove-fav:hover {
+      opacity: 1;
+    }
+    
+    .legend-bar {
+      padding: 8px 10px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      font-size: 0.85em;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+    
+    .legend-bar .filter-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: 1px solid transparent;
+    }
+    
+    .legend-bar .filter-badge:hover {
+      transform: scale(1.05);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .legend-bar .filter-badge.active {
+      border-color: #333;
+      font-weight: 600;
+    }
+    
+    .legend-bar .filter-badge i {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    
+    /* Map container */
+    #map { 
+      flex: 1;
+      position: relative;
+    }
+    
+    /* Bottom search bar */
+    .search-bar {
+      background: #fff;
+      border-top: 1px solid #ddd;
+      padding: 10px;
+      z-index: 1000;
+      flex-shrink: 0;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    
+    .search-bar input[type="text"] {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 16px;
+      min-width: 0;
+    }
+    
+    .search-bar label {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.9em;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    
+    .search-bar input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+    
+    .search-bar .reset-btn {
+      background: #666;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 0.9em;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    
+    .search-bar .reset-btn:active {
+      background: #444;
+    }
+    
+    @media (max-width: 500px) {
+      .search-bar {
+        flex-wrap: wrap;
+      }
+      .search-bar input[type="text"] {
+        width: 100%;
+        order: 1;
+      }
+      .search-bar label,
+      .search-bar .reset-btn {
+        order: 2;
+      }
+    }
+    
+    /* Empty state message */
+    .empty-state {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(255, 255, 255, 0.95);
+      padding: 20px 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      z-index: 500;
+      text-align: center;
+      max-width: 90%;
+    }
+    
+    .empty-state.hidden {
+      display: none;
+    }
+    
+    .empty-state h3 {
+      margin: 0 0 10px;
+      color: #666;
+    }
+    
+    .empty-state p {
+      margin: 0;
+      color: #999;
+      font-size: 0.9em;
+    }
+    
+    /* Popup styling */
+    .leaflet-popup-content {
+      margin: 12px;
+      min-width: 250px;
+      max-width: 90vw;
+    }
+    
+    .popup h3 {
+      margin: 0 0 10px;
+      font-size: 1.2em;
+      color: #333;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .fav-btn {
+      background: #3388ff;
+      color: white;
+      border: none;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 0.8em;
+      cursor: pointer;
+      margin-left: auto;
+    }
+    
+    .fav-btn.active {
+      background: #ff6b6b;
+    }
+    
+    .fav-btn:active {
+      opacity: 0.7;
+    }
+    
+    .popup table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 0.95em;
+    }
+    
+    .popup th {
+      text-align: left;
+      font-weight: 600;
+      padding: 6px 12px 6px 0;
+      white-space: nowrap;
+      color: #666;
+    }
+    
+    .popup td {
+      padding: 6px 0;
+      word-break: break-word;
+    }
+    
+    .popup tr {
+      border-bottom: 1px solid #f0f0f0;
+    }
+    
+    .popup tr:last-child {
+      border-bottom: none;
+    }
+    
+    /* Loading indicator */
+    .loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(255, 255, 255, 0.95);
+      padding: 20px 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      z-index: 2000;
+      font-size: 1.1em;
+    }
+    
+    .loading.hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="loading" class="loading">Laster kart...</div>
+  
+  <!-- Top bar with favorites and legend -->
+  <div class="top-bar">
+    <div id="favoritesBar" class="favorites-bar"></div>
+    <div class="legend-bar">
+      <span class="filter-badge" data-filter="favorite">
+        <i style="background:#3388ff"></i> Favoritt (<span id="count-fav">0</span>)
+      </span>
+      <span class="filter-badge" data-filter="online">
+        <i style="background:#4CAF50"></i> Online (<span id="count-online">0</span>)
+      </span>
+      <span class="filter-badge" data-filter="recent">
+        <i style="background:#FFA726"></i> Nylig (<span id="count-recent">0</span>)
+      </span>
+      <span class="filter-badge" data-filter="offline">
+        <i style="background:#999"></i> Offline (<span id="count-offline">0</span>)
+      </span>
+    </div>
+  </div>
+  
+  <!-- Map -->
+  <div id="map"></div>
+  
+  <!-- Empty state message -->
+  <div id="emptyState" class="empty-state hidden">
+    <h3>Ingen noder funnet</h3>
+    <p>Prøv å endre filter eller søkeord</p>
+  </div>
+  
+  <!-- Bottom search bar -->
+  <div class="search-bar">
+    <input id="searchInput" type="text" placeholder="Søk node..." autocomplete="off">
+    <label><input type="checkbox" id="toggleTrails" checked> Trails</label>
+    <button id="resetButton" class="reset-btn">Nullstill</button>
+  </div>
+  
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // Initialize map - will auto-zoom to show all nodes on load
+    const map = L.map('map', {
+      zoomControl: true,
+      attributionControl: true
+    }).setView([50, 10], 4);  // Start with Europe view, will auto-adjust
+    
+    // Move zoom control to top-left to avoid conflicts with search bar
+    map.zoomControl.setPosition('topleft');
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap',
+      maxZoom: 18
+    }).addTo(map);
+    
+    let nodesLayer = L.featureGroup().addTo(map);
+    let trailsLayer = L.layerGroup().addTo(map);
+    let allNodes = [];
+    let favorites = new Set();
+    let activeFilter = null;
+    
+    // Hide loading after map loads
+    map.whenReady(() => {
+      document.getElementById('loading').classList.add('hidden');
+    });
+    
+    // Reset view
+    function resetView() {
+      activeFilter = null;
+      document.getElementById('searchInput').value = '';
+      document.querySelectorAll('.filter-badge').forEach(b => b.classList.remove('active'));
+      renderNodes();
+      
+      // Zoom to show all nodes
+      if (nodesLayer.getLayers().length > 0) {
+        const bounds = nodesLayer.getBounds();
+        if (bounds.isValid()) {
+          map.fitBounds(bounds, { padding: [50, 50] });
+        }
+      } else {
+        // Fallback to Europe view if no nodes
+        map.setView([50, 10], 4);
+      }
+    }
+    
+    // Update favorites bar
+    function updateFavoritesBar() {
+      const bar = document.getElementById('favoritesBar');
+      const favNodes = allNodes.filter(f => favorites.has(f.properties.nodeId));
+      
+      if (favNodes.length === 0) {
+        bar.innerHTML = '';
+        return;
+      }
+      
+      let html = '<span class="fav-label">★ Favoritter:</span>';
+      favNodes.forEach(f => {
+        const props = f.properties;
+        const name = props.longName || props.nodeId;
+        html += `<span class="fav-chip" onclick="zoomToNode('${props.nodeId}')">
+          ${name}
+          <span class="remove-fav" onclick="event.stopPropagation(); removeFavorite('${props.nodeId}')">✕</span>
+        </span>`;
+      });
+      bar.innerHTML = html;
+    }
+    
+    // Zoom to specific node
+    function zoomToNode(nodeId) {
+      const node = allNodes.find(f => f.properties.nodeId === nodeId);
+      if (node && node.geometry.coordinates) {
+        map.setView([node.geometry.coordinates[1], node.geometry.coordinates[0]], 14);
+        // Open popup
+        nodesLayer.eachLayer(layer => {
+          if (layer.getPopup && layer.getPopup()) {
+            const content = layer.getPopup().getContent();
+            if (content.includes(nodeId)) {
+              layer.openPopup();
+            }
+          }
+        });
+      }
+    }
+    
+    // Remove favorite
+    function removeFavorite(nodeId) {
+      favorites.delete(nodeId);
+      localStorage.setItem('favorites', JSON.stringify([...favorites]));
+      updateFavoritesBar();
+      renderNodes();
+      loadNodes();
+    }
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap',
+      maxZoom: 18
+    }).addTo(map);
+    
+    // Hide loading after map loads
+    map.whenReady(() => {
+      document.getElementById('loading').classList.add('hidden');
+    });
+    
+    function createPopupContent(props) {
+      const isFav = props.isFavorite;
+      
+      // Status indicator
+      let statusColor = '#999';
+      let statusText = 'Ukjent';
+      if (props.status === 'online') {
+        statusColor = '#4CAF50';
+        statusText = 'Online';
+      } else if (props.status === 'recent') {
+        statusColor = '#FFA726';
+        statusText = 'Nylig aktiv';
+      } else if (props.status === 'offline') {
+        statusColor = '#999';
+        statusText = 'Offline';
+      }
+      
+      let html = `<div class="popup">
+        <h3>
+          ${props.longName || props.nodeId}
+          <button class="fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${props.nodeId}')">
+            ${isFav ? '★ Favoritt' : '☆ Legg til'}
+          </button>
+        </h3>
+        <div style="margin-bottom:10px; padding:6px; background:${statusColor}22; border-left:3px solid ${statusColor}; border-radius:3px;">
+          <strong style="color:${statusColor}">⬤ ${statusText}</strong>
+        </div>
+        <table>`;
+      
+      const rows = [
+        ['Node ID', props.nodeId],
+        ['Kortnavn', props.shortName],
+        ['Hardware', props.hwModel || 'Ukjent'],
+        ['Rolle', props.role || 'CLIENT'],
+        ['Kilde', props.source || 'ukjent'],
+        ['─────────', '────────────'],
+        ['Batteri', props.batteryLevel ? `${props.batteryLevel}%` : 'N/A'],
+        ['Spenning', props.voltage ? `${props.voltage.toFixed(2)}V` : 'N/A'],
+        ['SNR', props.snr ? `${props.snr} dB` : 'N/A'],
+        ['Høyde', props.altitude ? `${Math.round(props.altitude)}m` : 'N/A'],
+        ['Kanal util.', props.channelUtil ? `${props.channelUtil.toFixed(1)}%` : 'N/A'],
+        ['Air util. TX', props.airUtilTx ? `${props.airUtilTx.toFixed(1)}%` : 'N/A'],
+        ['─────────', '────────────'],
+        ['Sist sett', props.lastHeardNorwegian || 'N/A'],
+        ['For', props.lastHeardAgoSec ? formatDuration(props.lastHeardAgoSec) : 'N/A']
+      ];
+      
+      if (props.customLabel) rows.unshift(['Label', props.customLabel]);
+      if (props.notes) rows.push(['Notater', props.notes]);
+      
+      rows.forEach(([key, val]) => {
+        if (key === '─────────') {
+          html += `<tr style="height:2px; background:#eee"><td colspan="2"></td></tr>`;
+        } else if (val && val !== 'N/A') {
+          html += `<tr><th>${key}:</th><td>${val}</td></tr>`;
+        }
+      });
+      
+      html += '</table></div>';
+      return html;
+    }
+    
+    function formatDuration(seconds) {
+      if (seconds < 60) return `${seconds}s siden`;
+      if (seconds < 3600) return `${Math.floor(seconds / 60)}m siden`;
+      if (seconds < 86400) return `${Math.floor(seconds / 3600)}t siden`;
+      return `${Math.floor(seconds / 86400)}d siden`;
+    }
+    
+    function loadNodes() {
+      fetch(`/nodes.geojson?_=${Date.now()}`)
+        .then(r => r.json())
+        .then(data => {
+          console.log('Loaded nodes:', data.features.length);
+          allNodes = data.features;
+          renderNodes();
+          
+          // Auto-zoom to show all nodes on first load
+          if (allNodes.length > 0 && nodesLayer.getLayers().length > 0) {
+            const bounds = nodesLayer.getBounds();
+            if (bounds.isValid()) {
+              map.fitBounds(bounds, { padding: [50, 50] });
+            }
+          }
+        })
+        .catch(err => console.error('Error loading nodes:', err));
+    }
+    
+    function loadTrails() {
+      if (!document.getElementById('toggleTrails').checked) {
+        trailsLayer.clearLayers();
+        return;
+      }
+      
+      fetch(`/trails.geojson?_=${Date.now()}`)
+        .then(r => r.json())
+        .then(data => {
+          trailsLayer.clearLayers();
+          data.features.forEach(f => {
+            L.geoJSON(f, {
+              style: {
+                color: f.properties.favorite ? '#3388ff' : '#999',
+                weight: 2,
+                opacity: 0.6
+              }
+            }).addTo(trailsLayer);
+          });
+        })
+        .catch(err => console.error('Error loading trails:', err));
+    }
+    
+    function renderNodes() {
+      // Guard: Don't render if no nodes loaded yet
+      if (!allNodes || allNodes.length === 0) {
+        console.log('No nodes loaded yet');
+        return;
+      }
+      
+      const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+      
+      nodesLayer.clearLayers();
+      
+      // Count nodes by status
+      let counts = {favorite: 0, online: 0, recent: 0, offline: 0};
+      let displayed = 0;
+      let filteredNodes = [];
+      
+      allNodes.forEach(f => {
+        const props = f.properties;
+        // Check both server favorites and local favorites
+        const isFav = props.isFavorite || favorites.has(props.nodeId);
+        
+        // Count by status
+        if (isFav) counts.favorite++;
+        if (props.status === 'online') counts.online++;
+        else if (props.status === 'recent') counts.recent++;
+        else counts.offline++;
+        
+        // Apply filter
+        if (activeFilter === 'favorite' && !isFav) return;
+        if (activeFilter && activeFilter !== 'favorite' && props.status !== activeFilter) return;
+        
+        // Apply search
+        const searchable = [
+          props.nodeId,
+          props.longName,
+          props.shortName,
+          props.customLabel
+        ].filter(Boolean).join(' ').toLowerCase();
+        
+        if (searchTerm && !searchable.includes(searchTerm)) return;
+        
+        // Determine color based on status
+        let color = '#3388ff';  // Default blue
+        if (isFav) {
+          color = '#3388ff';  // Blue for favorites
+        } else if (props.status === 'online') {
+          color = '#4CAF50';  // Green for online
+        } else if (props.status === 'recent') {
+          color = '#FFA726';  // Orange/yellow for recent
+        } else if (props.status === 'offline') {
+          color = '#999999';  // Grey for offline
+        }
+        
+        // Determine if local node (USB/WiFi) or global (MQTT)
+        const isLocal = props.source && (props.source.includes('USB') || props.source.includes('WiFi'));
+        
+        const marker = L.circleMarker([f.geometry.coordinates[1], f.geometry.coordinates[0]], {
+          radius: isFav ? 8 : (isLocal ? 7 : 6),
+          fillColor: color,
+          color: isLocal ? '#000' : '#fff',  // Black ring for local, white for MQTT
+          weight: isLocal ? 2.5 : 1.5,
+          opacity: 1,
+          fillOpacity: isLocal ? 0.9 : 0.7
+        });
+        
+        // Add isFavorite status to props for popup
+        const popupProps = {...props, isFavorite: isFav};
+        marker.bindPopup(createPopupContent(popupProps), { maxWidth: 300 });
+        marker.addTo(nodesLayer);
+        filteredNodes.push(f);
+        displayed++;
+      });
+      
+      // Update counts
+      document.getElementById('count-fav').textContent = counts.favorite;
+      document.getElementById('count-online').textContent = counts.online;
+      document.getElementById('count-recent').textContent = counts.recent;
+      document.getElementById('count-offline').textContent = counts.offline;
+      
+      // Show/hide empty state
+      const emptyState = document.getElementById('emptyState');
+      if (displayed === 0) {
+        emptyState.classList.remove('hidden');
+      } else {
+        emptyState.classList.add('hidden');
+      }
+      
+      // Auto-zoom to displayed nodes if filter or search is active
+      console.log('Zoom check:', {activeFilter, searchTerm, displayed});
+      if ((activeFilter || searchTerm) && displayed > 0) {
+        console.log('Zoom condition met, waiting for markers...');
+        // Use setTimeout to ensure markers are added to map before getting bounds
+        setTimeout(() => {
+          const layerCount = nodesLayer.getLayers().length;
+          console.log('Layers in nodesLayer:', layerCount);
+          
+          if (layerCount > 0) {
+            const bounds = nodesLayer.getBounds();
+            console.log('Bounds:', bounds);
+            console.log('Bounds valid:', bounds.isValid());
+            
+            if (bounds.isValid()) {
+              // Adjust max zoom based on number of displayed nodes
+              let maxZoom = 15;
+              if (displayed === 1) maxZoom = 14;  // Single node: zoom closer
+              else if (displayed <= 3) maxZoom = 13;  // Few nodes: moderate zoom
+              else if (displayed <= 10) maxZoom = 12;  // Several nodes: wider view
+              
+              console.log(`Auto-zooming to ${displayed} nodes with maxZoom ${maxZoom}`);
+              map.fitBounds(bounds, { padding: [50, 50], maxZoom: maxZoom });
+            }
+          }
+        }, 100);
+      }
+    }
+    
+    // Toggle favorite function (called from popup button)
+    function toggleFavorite(nodeId) {
+      if (favorites.has(nodeId)) {
+        favorites.delete(nodeId);
+      } else {
+        favorites.add(nodeId);
+      }
+      
+      // Save to localStorage
+      localStorage.setItem('favorites', JSON.stringify([...favorites]));
+      
+      // Update favorites bar and re-render
+      updateFavoritesBar();
+      renderNodes();
+      loadNodes();
+    }
+    
+    // Load favorites from localStorage
+    function loadFavorites() {
+      try {
+        const stored = localStorage.getItem('favorites');
+        if (stored) {
+          favorites = new Set(JSON.parse(stored));
+        }
+      } catch (e) {
+        console.error('Failed to load favorites:', e);
+      }
+    }
+    
+    // Event listeners
+    document.getElementById('searchInput').addEventListener('input', renderNodes);
+    document.getElementById('toggleTrails').addEventListener('change', loadTrails);
+    document.getElementById('resetButton').addEventListener('click', resetView);
+    
+    // Filter badge click handlers
+    document.querySelectorAll('.filter-badge').forEach(badge => {
+      badge.addEventListener('click', function() {
+        const filter = this.dataset.filter;
+        
+        // Toggle active state
+        if (activeFilter === filter) {
+          activeFilter = null;
+          this.classList.remove('active');
+        } else {
+          document.querySelectorAll('.filter-badge').forEach(b => b.classList.remove('active'));
+          activeFilter = filter;
+          this.classList.add('active');
+        }
+        
+        renderNodes();
+      });
+    });
+    
+    // Initial load and refresh
+    loadFavorites();
+    loadNodes();
+    loadTrails();
+    
+    setInterval(() => {
+      loadNodes();
+      loadTrails();
+    }, 60000); // Update every minute
+    
+    // Handle orientation changes on mobile
+    window.addEventListener('orientationchange', () => {
+      setTimeout(() => map.invalidateSize(), 100);
+    });
+  </script>
+</body>
+</html>

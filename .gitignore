@@ -1,0 +1,39 @@
+# Docker volumes
+config/device_registry.json
+data/
+
+# Logs
+*.log
+logs/
+
+# Environment
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backups
+*.backup
+*.bak
+
+# Mosquitto
+mosquitto/config/passwd
+mosquitto/data/
+
+# Tailscale
+tailscale/state/
+tailscale/*.ts

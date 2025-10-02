@@ -1,0 +1,36 @@
+{
+  "_comment": "Meshtastic Node Sources - Dual USB + WiFi IoT network",
+  "sources": [
+    {
+      "type": "serial",
+      "path": "/dev/ttyUSB0",
+      "name": "usb-node-1",
+      "enabled": true,
+      "description": "Heltec V3 #1 (original gateway)"
+    },
+    {
+      "type": "serial",
+      "path": "/dev/ttyUSB1",
+      "name": "usb-node-2",
+      "enabled": true,
+      "description": "Heltec V3 #2 (newly connected)"
+    },
+    {
+      "type": "tcp",
+      "host": "172.19.228.51",
+      "port": 4403,
+      "name": "iot-wifi-node",
+      "enabled": true,
+      "description": "IoT network WiFi node (updated IP: 172.19.228.51)"
+    }
+  ],
+  "_note": "Add more IoT network nodes below after running ./scan-iot-network.sh",
+  "iot_network_template": {
+    "type": "tcp",
+    "host": "192.168.4.X",
+    "port": 4403,
+    "name": "iot-node-X",
+    "enabled": true,
+    "description": "IoT network Meshtastic device"
+  }
+}

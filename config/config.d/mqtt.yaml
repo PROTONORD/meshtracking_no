@@ -1,0 +1,13 @@
+ModuleConfig:
+  MQTT:
+    Enabled: true
+    Address: mosquitto
+    Port: 1883
+    Username: meshlocal
+    Password: meshLocal2025
+    TLSEnabled: false
+    EncryptionEnabled: true
+    Root: msh/EU_868
+    JSONEnabled: true
+    MapReportingEnabled: false
+    ProxyToClientEnabled: true

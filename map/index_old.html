@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Meshtastic MQTT Nodes</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    html, body, #map { height: 100%; margin: 0; }
+    .controls {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.93);
+      padding: 8px 10px;
+      border-radius: 6px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+      font-family: sans-serif;
+      max-width: 260px;
+    }
+    .controls h2 {
+      font-size: 1em;
+      margin: 0 0 6px;
+    }
+    .controls input[type="text"] {
+      width: 100%;
+      padding: 4px 6px;
+      margin-bottom: 6px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    .controls label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.9em;
+      margin-bottom: 4px;
+    }
+    .legend {
+      margin-top: 6px;
+      font-size: 0.85em;
+      color: #444;
+    }
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-right: 8px;
+    }
+    .legend i {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .popup h3 {
+      margin: 0 0 0.4em;
+      font-size: 1.1em;
+    }
+    .popup table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 0.9em;
+    }
+    .popup th {
+      text-align: left;
+      font-weight: 600;
+      padding: 0.1em 0.4em 0.1em 0;
+      white-space: nowrap;
+    }
+    .popup td {
+      padding: 0.1em 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="controls" class="controls" style="left: 60px;">
+    <h2>Meshtastic kart</h2>
+    <input id="searchInput" type="text" placeholder="Søk etter node" autocomplete="off">
+    <label>
+      <input type="checkbox" id="onlyFavorites">
+      Vis bare favoritter
+    </label>
+    <label>
+      <input type="checkbox" id="toggleTrails" checked>
+      Vis trails (siste 24 t)
+    </label>
+    <div class="legend">
+      <span><i style="background:#ff8c00"></i> Favoritt</span>
+      <span><i style="background:#3388ff"></i> Vanlig</span>
+    </div>
+  </div>
+  <div id="map"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map').setView([40, 0], 3);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 18
+    }).addTo(map);
+
+    function formatAgo(seconds) {
+      if (typeof seconds !== 'number' || Number.isNaN(seconds) || seconds < 0) {
+        return null;
+      }
+      const units = [
+        [86400, 'd'],
+        [3600, 'h'],
+        [60, 'm'],
+        [1, 's'],
+      ];
+      let remaining = Math.floor(seconds);
+      const parts = [];
+      for (const [unitSeconds, label] of units) {
+        if (remaining >= unitSeconds) {
+          const value = Math.floor(remaining / unitSeconds);
+          remaining -= value * unitSeconds;
+          parts.push(`${value}${label}`);
+        }
+        if (parts.length === 2) break;
+      }
+      return parts.join(' ') || '0s';
+    }
+
+    function renderPopup(properties) {
+      const title = properties.longName || properties.shortName || properties.nodeId || properties.id;
+      const lines = [];
+      if (title) {
+        lines.push(`<h3>${title}</h3>`);
+      }
+
+      const lastHeardAgo = formatAgo(properties.lastHeardAgoSec);
+      const rows = [
+        ['Node ID', properties.nodeId || properties.id],
+        ['Short name', properties.shortName],
+        ['Hardware', properties.hardware],
+        ['Hops away', properties.hopsAway],
+        ['Via MQTT', properties.viaMqtt === undefined ? null : (properties.viaMqtt ? 'Yes' : 'No')],
+        ['Last heard', properties.lastHeard ? `${properties.lastHeard}${lastHeardAgo ? ` (${lastHeardAgo})` : ''}` : null],
+        ['Latitude', properties.latitude?.toFixed ? properties.latitude.toFixed(5) : properties.latitude],
+        ['Longitude', properties.longitude?.toFixed ? properties.longitude.toFixed(5) : properties.longitude],
+        ['Altitude', properties.altitude !== undefined ? `${properties.altitude} m` : null],
+        ['Location source', properties.locationSource],
+        ['Battery', properties.batteryLevel !== undefined ? `${properties.batteryLevel}%` : null],
+        ['Voltage', properties.voltage !== undefined ? `${properties.voltage} V` : null],
+        ['Air Util TX', properties.airUtilTx !== undefined ? `${properties.airUtilTx}%` : null],
+        ['Channel util.', properties.channelUtilization !== undefined ? `${properties.channelUtilization}%` : null],
+        ['Uptime', properties.uptimeSeconds !== undefined ? formatAgo(properties.uptimeSeconds) : null],
+      ].filter(([, value]) => value !== null && value !== undefined && value !== '');
+
+      if (rows.length) {
+        const tableRows = rows
+          .map(([label, value]) => `<tr><th>${label}</th><td>${value}</td></tr>`)
+          .join('');
+        lines.push(`<table>${tableRows}</table>`);
+      }
+
+      return `<div class="popup">${lines.join('')}</div>`;
+    }
+
+    function makeMarker(feature) {
+      const props = feature.properties || {};
+      const isFavorite = props.favorite || props.isFavorite;
+      const color = isFavorite ? '#ff8c00' : '#3388ff';
+      const radius = isFavorite ? 7 : 5;
+      return L.circleMarker([props.latitude, props.longitude], {
+        radius,
+        color,
+        weight: isFavorite ? 2 : 1,
+        opacity: 1,
+        fillColor: color,
+        fillOpacity: 0.7,
+      });
+    }
+
+    function formatAgo(seconds) {
+      if (typeof seconds !== 'number' || Number.isNaN(seconds) || seconds < 0) {
+        return null;
+      }
+      const units = [
+        [86400, 'd'],
+        [3600, 'h'],
+        [60, 'm'],
+        [1, 's'],
+      ];
+      let remaining = Math.floor(seconds);
+      const parts = [];
+      for (const [unitSeconds, label] of units) {
+        if (remaining >= unitSeconds) {
+          const value = Math.floor(remaining / unitSeconds);
+          remaining -= value * unitSeconds;
+          parts.push(`${value}${label}`);
+        }
+        if (parts.length === 2) break;
+      }
+      return parts.join(' ') || '0s';
+    }
+
+    function renderPopup(properties) {
+      const title = properties.longName || properties.shortName || properties.favoriteLabel || properties.nodeId || properties.id;
+      const lines = [];
+      if (title) {
+        lines.push(`<h3>${title}</h3>`);
+      }
+
+      if (properties.favoriteLabel || properties.note) {
+        const tags = [];
+        if (properties.favoriteLabel) tags.push(`<strong>${properties.favoriteLabel}</strong>`);
+        if (properties.note) tags.push(properties.note);
+        lines.push(`<p>${tags.join('<br>')}</p>`);
+      }
+
+      const lastHeardAgo = formatAgo(properties.lastHeardAgoSec);
+      const rows = [
+        ['Node ID', properties.nodeId || properties.id],
+        ['Kortnavn', properties.shortName],
+        ['Maskinvare', properties.hardware],
+        ['Hopp unna', properties.hopsAway],
+        ['Via MQTT', properties.viaMqtt === undefined ? null : (properties.viaMqtt ? 'Ja' : 'Nei')],
+        ['Sist hørt', properties.lastHeard ? `${properties.lastHeard}${lastHeardAgo ? ` (${lastHeardAgo})` : ''}` : null],
+        ['Breddegrad', properties.latitude?.toFixed ? properties.latitude.toFixed(5) : properties.latitude],
+        ['Lengdegrad', properties.longitude?.toFixed ? properties.longitude.toFixed(5) : properties.longitude],
+        ['Høyde', properties.altitude !== undefined ? `${properties.altitude} m` : null],
+        ['Posisjonskilde', properties.locationSource],
+        ['Batteri', properties.batteryLevel !== undefined ? `${properties.batteryLevel}%` : null],
+        ['Spenning', properties.voltage !== undefined ? `${properties.voltage} V` : null],
+        ['Air util TX', properties.airUtilTx !== undefined ? `${properties.airUtilTx}%` : null],
+        ['Kanalbruk', properties.channelUtilization !== undefined ? `${properties.channelUtilization}%` : null],
+        ['Oppetid', properties.uptimeSeconds !== undefined ? formatAgo(properties.uptimeSeconds) : null],
+      ].filter(([, value]) => value !== null && value !== undefined && value !== '');
+
+      if (rows.length) {
+        const tableRows = rows
+          .map(([label, value]) => `<tr><th>${label}</th><td>${value}</td></tr>`)
+          .join('');
+        lines.push(`<table>${tableRows}</table>`);
+      }
+
+      return `<div class="popup">${lines.join('')}</div>`;
+    }
+
+    const markersLayer = L.layerGroup().addTo(map);
+    const trailsLayer = L.layerGroup().addTo(map);
+    let allMarkers = [];
+
+    async function loadGeojson() {
+      const res = await fetch('nodes.geojson?_=' + Date.now());
+      if (!res.ok) return;
+      const data = await res.json();
+      markersLayer.clearLayers();
+      allMarkers = [];
+
+      const markerFeatures = data.features || [];
+      markerFeatures.forEach((feature) => {
+        const marker = makeMarker(feature);
+        const props = feature.properties || {};
+        marker.feature = feature;
+        marker.bindPopup(renderPopup(props));
+        marker.addTo(markersLayer);
+        allMarkers.push(marker);
+      });
+
+      if (markerFeatures.length > 0) {
+        const bounds = L.featureGroup(allMarkers).getBounds();
+        if (bounds.isValid()) {
+          map.fitBounds(bounds, { maxZoom: 8 });
+        }
+      }
+    }
+
+    async function loadTrails() {
+      const res = await fetch('trails.geojson?_=' + Date.now());
+      if (!res.ok) return;
+      const data = await res.json();
+      trailsLayer.clearLayers();
+
+      (data.features || []).forEach((feature) => {
+        const line = L.geoJSON(feature, {
+          style: {
+            color: '#666',
+            weight: 2,
+            opacity: 0.6,
+          }
+        });
+        line.addTo(trailsLayer);
+      });
+    }
+
+    function applyFilters() {
+      const query = document.getElementById('searchInput').value.trim().toLowerCase();
+      const onlyFavorites = document.getElementById('onlyFavorites').checked;
+
+      allMarkers.forEach((marker) => {
+        const props = marker.feature?.properties || {};
+        const matchesQuery = query === '' || (props.searchIndex || '').includes(query);
+        const isFav = props.favorite || props.isFavorite;
+        const matchesFavorite = !onlyFavorites || isFav;
+        const visible = matchesQuery && matchesFavorite;
+        if (visible) {
+          marker.addTo(markersLayer);
+        } else {
+          markersLayer.removeLayer(marker);
+        }
+      });
+    }
+
+    function toggleTrails() {
+      const checked = document.getElementById('toggleTrails').checked;
+      if (checked) {
+        trailsLayer.addTo(map);
+      } else {
+        map.removeLayer(trailsLayer);
+      }
+    }
+
+    async function refresh() {
+      await loadGeojson();
+      await loadTrails();
+      applyFilters();
+      toggleTrails();
+    }
+
+    document.getElementById('searchInput').addEventListener('input', applyFilters);
+    document.getElementById('onlyFavorites').addEventListener('change', applyFilters);
+    document.getElementById('toggleTrails').addEventListener('change', toggleTrails);
+
+    refresh();
+    setInterval(refresh, 60000);
+  </script>
+</body>
+</html>

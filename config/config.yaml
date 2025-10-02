@@ -1,0 +1,17 @@
+### MeshtasticD configuration (MQTT gateway)
+---
+Lora:
+  Module: sim
+
+Logging:
+  LogLevel: info
+
+Webserver:
+  Port: 9443
+
+General:
+  MaxNodes: 1000
+  MaxMessageQueue: 200
+  ConfigDirectory: /etc/meshtasticd/config.d/
+  AvailableDirectory: /etc/meshtasticd/available.d/
+  MACAddress: 02:00:00:00:00:01

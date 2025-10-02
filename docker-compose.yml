@@ -1,0 +1,126 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: meshtastic-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: meshtastic
+      POSTGRES_USER: meshuser
+      POSTGRES_PASSWORD: meshpass2025
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./map/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "127.0.0.1:5434:5432"
+    networks:
+      - meshnet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U meshuser -d meshtastic"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mosquitto:
+    image: eclipse-mosquitto:latest
+    container_name: meshtastic-mosquitto
+    restart: unless-stopped
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    ports:
+      - "0.0.0.0:1883:1883"
+    networks:
+      - meshnet
+
+  meshtasticd:
+    image: meshtastic/meshtasticd:latest
+    container_name: meshtasticd
+    restart: unless-stopped
+    volumes:
+      - ./config:/etc/meshtasticd:ro
+      - meshtasticd-state:/var/lib/meshtasticd
+    ports:
+      - "127.0.0.1:4403:4403"
+      - "127.0.0.1:9443:9443"
+    depends_on:
+      - mosquitto
+    networks:
+      - meshnet
+
+  meshmap:
+    build: ./map
+    container_name: meshtastic-map
+    restart: unless-stopped
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_PORT: "1883"
+      MQTT_USER: meshlocal
+      MQTT_PASS: meshLocal2025
+      MQTT_TOPIC: "msh/#"
+      OUTPUT_PATH: /data/nodes.geojson
+      TRAILS_OUTPUT_PATH: /data/trails.geojson
+      DB_TYPE: postgresql
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: meshtastic
+      DB_USER: meshuser
+      DB_PASSWORD: meshpass2025
+      # Device Manager Configuration
+      DISCOVERY_INTERVAL: "60"           # Scan for new devices every 60s
+      POLL_INTERVAL: "30"                # Poll active devices every 30s (reduced for testing)
+      MAX_FAIL_COUNT: "10"               # Remove device after 10 failed attempts
+      AUTO_DETECT_NETWORKS: "true"       # Automatically detect and scan local networks (including Tailscale)
+      MANUAL_SCAN_NETWORKS: ""           # Optional: Additional networks to scan (comma-separated CIDR)
+      MESHTASTIC_TCP_PORT: "4403"        # Meshtastic TCP port
+      # Note: Tailscale network (100.64.0.0/10) is auto-detected if server is on Tailscale
+      # Legacy settings for backward compatibility
+      HISTORY_WINDOW_SECONDS: "86400"
+      SERIAL_PORT: /dev/ttyUSB0
+      NODE_POLL_INTERVAL: "300"
+      NODE_API_PORT: "8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+    volumes:
+      - /home/kau005/meshtastic-data:/data
+      - ./config:/config:ro
+    devices:
+      - /dev/ttyUSB0:/dev/ttyUSB0
+      # - /dev/ttyUSB1:/dev/ttyUSB1  # Not connected yet
+    group_add:
+      - "20"  # dialout group for USB serial access
+    ports:
+      - "0.0.0.0:8088:8080"
+      - "0.0.0.0:8081:8081"
+    networks:
+      - meshnet
+
+  tailscale:
+    image: tailscale/tailscale:latest
+    container_name: tailscale
+    restart: unless-stopped
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    volumes:
+      - ./tailscale/state:/var/lib/tailscale
+      - ./tailscale/run.sh:/start.sh:ro
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      - TS_AUTHKEY=${TS_AUTHKEY}
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_EXTRA_ARGS=${TS_EXTRA_ARGS}
+    command: ["/bin/sh", "/start.sh"]
+
+volumes:
+  postgres-data:
+  meshtasticd-state:
+  map-data:
+
+networks:
+  meshnet:
+    driver: bridge
