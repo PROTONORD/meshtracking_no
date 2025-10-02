@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="no">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Meshtastic Kart</title>
+  <title>Meshtastic Map</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <style>
     * { box-sizing: border-box; }
@@ -304,7 +304,7 @@
   </style>
 </head>
 <body>
-  <div id="loading" class="loading">Laster kart...</div>
+  <div id="loading" class="loading">Loading map...</div>
   
   <!-- Header banner -->
   <div class="header-banner"></div>
@@ -314,13 +314,13 @@
     <div id="favoritesBar" class="favorites-bar"></div>
     <div class="legend-bar">
       <span class="filter-badge" data-filter="favorite">
-        <i style="background:#3388ff"></i> Favoritt (<span id="count-fav">0</span>)
+        <i style="background:#3388ff"></i> Favorite (<span id="count-fav">0</span>)
       </span>
       <span class="filter-badge" data-filter="online">
         <i style="background:#4CAF50"></i> Online (<span id="count-online">0</span>)
       </span>
       <span class="filter-badge" data-filter="recent">
-        <i style="background:#FFA726"></i> Nylig (<span id="count-recent">0</span>)
+        <i style="background:#FFA726"></i> Recent (<span id="count-recent">0</span>)
       </span>
       <span class="filter-badge" data-filter="offline">
         <i style="background:#999"></i> Offline (<span id="count-offline">0</span>)
@@ -333,15 +333,15 @@
   
   <!-- Empty state message -->
   <div id="emptyState" class="empty-state hidden">
-    <h3>Ingen noder funnet</h3>
-    <p>Prøv å endre filter eller søkeord</p>
+    <h3>No nodes found</h3>
+    <p>Try changing filter or search term</p>
   </div>
   
   <!-- Bottom search bar -->
   <div class="search-bar">
-    <input id="searchInput" type="text" placeholder="Søk node..." autocomplete="off">
+    <input id="searchInput" type="text" placeholder="Search node..." autocomplete="off">
     <label><input type="checkbox" id="toggleTrails" checked> Trails</label>
-    <button id="resetButton" class="reset-btn">Nullstill</button>
+    <button id="resetButton" class="reset-btn">Reset</button>
   </div>
   
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -400,7 +400,7 @@
         return;
       }
       
-      let html = '<span class="fav-label">★ Favoritter:</span>';
+      let html = '<span class="fav-label">★ Favorites:</span>';
       favNodes.forEach(f => {
         const props = f.properties;
         const name = props.longName || props.nodeId;
