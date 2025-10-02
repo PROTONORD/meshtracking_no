@@ -1,8 +1,10 @@
 # Meshtastic Multi-Source Map Visualization
 
-**Robust, skalerbar Meshtastic node tracking med PostgreSQL og dynamisk device discovery**
+**Robust, scalable Meshtastic node tracking with PostgreSQL and dynamic device discovery**
 
-## 🎯 Funksjonalitet
+![Map Preview](assets/map_preview.png)
+
+## 🎯 Features
 
 ### 📡 Multi-Source Data Collection
 - **Global MQTT bridge** (mqtt.meshtastic.org - EU_868)
