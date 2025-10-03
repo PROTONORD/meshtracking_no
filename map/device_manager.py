@@ -300,6 +300,9 @@ class MeshtasticDeviceManager:
             if interface.nodes:
                 for node_id, node in interface.nodes.items():
                     try:
+                        # Get lastHeard timestamp from node database
+                        last_heard = node.get('lastHeard')
+                        
                         node_data = {
                             'node_id': node_id,
                             'node_num': node.get('num'),
@@ -314,6 +317,7 @@ class MeshtasticDeviceManager:
                             'voltage': node.get('deviceMetrics', {}).get('voltage'),
                             'snr': node.get('snr'),
                             'hops_away': node.get('hopsAway'),
+                            'last_heard': last_heard,  # Use actual lastHeard from node
                             'source': device.name
                         }
                         nodes_data.append(node_data)
@@ -349,6 +353,15 @@ class MeshtasticDeviceManager:
             # Prepare data for bulk upsert
             values = []
             for node in nodes_data:
+                # Convert lastHeard Unix timestamp to datetime if present
+                last_heard_dt = None
+                if node.get('last_heard'):
+                    try:
+                        from datetime import datetime
+                        last_heard_dt = datetime.fromtimestamp(node['last_heard'])
+                    except:
+                        pass
+                
                 values.append((
                     node['node_id'],
                     node['node_num'],
@@ -363,7 +376,8 @@ class MeshtasticDeviceManager:
                     node['voltage'],
                     node['snr'],
                     node['hops_away'],
-                    node['source']
+                    node['source'],
+                    last_heard_dt  # Use actual timestamp from node
                 ))
             
             # Bulk upsert
@@ -389,11 +403,11 @@ class MeshtasticDeviceManager:
                     snr = COALESCE(EXCLUDED.snr, nodes.snr),
                     hops_away = COALESCE(EXCLUDED.hops_away, nodes.hops_away),
                     source = EXCLUDED.source,
-                    last_heard = NOW(),
+                    last_heard = COALESCE(EXCLUDED.last_heard, nodes.last_heard),
                     last_updated = NOW()
                 """,
                 values,
-                template="(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())"
+                template="(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())"
             )
             
             conn.commit()
