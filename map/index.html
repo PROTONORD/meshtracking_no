@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <!-- VERSION: 3.2.2 - Build 2025-10-03T20:45 - Fixed createNodeMarker function missing error -->
+  <!-- VERSION: 3.2.3 - Build 2025-10-03T21:00 - Fixed LatLng undefined error and API endpoint correction -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Meshtastic Map v2.0 - LIVE TELEMETRI VERSJON</title>
@@ -1844,9 +1844,7 @@
       
       try {
         // Fetch updated node data
-        const response = await fetch(`${API_BASE_URL}/api/nodes.geojson`, {
-          headers: { 'Authorization': `Bearer ${API_KEY}` }
-        });
+        const response = await fetch(`${API_BASE_URL}/nodes.geojson`);
         const data = await response.json();
         
         // Find the specific node
@@ -2523,12 +2521,16 @@
           
           // Add click event to zoom to node when popup opens
           marker.on('popupopen', function() {
-            // Zoom to node location with some padding
+            // Zoom to node location with some padding - use geometry coordinates
+            const lat = f.geometry.coordinates[1];
+            const lon = f.geometry.coordinates[0];
             setTimeout(() => {
-              map.setView([props.latitude, props.longitude], Math.max(map.getZoom(), 13), {
-                animate: true,
-                duration: 0.5
-              });
+              if (lat && lon) {
+                map.setView([lat, lon], Math.max(map.getZoom(), 13), {
+                  animate: true,
+                  duration: 0.5
+                });
+              }
             }, 100);
             
             // Start live updates for this node
