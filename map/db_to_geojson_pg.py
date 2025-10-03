@@ -147,6 +147,7 @@ def generate_geojson(conn) -> None:
             n.node_id, n.node_num, n.long_name, n.short_name, n.hw_model, n.role,
             n.latitude, n.longitude, n.altitude, n.battery_level, n.voltage, n.snr,
             n.last_heard, n.source,
+            n.has_power_sensor, n.has_environment_sensor, n.has_air_quality_sensor,
             t.channel_utilization, t.air_util_tx,
             p.timestamp as position_time
         FROM nodes n
@@ -217,6 +218,9 @@ def generate_geojson(conn) -> None:
             "source": node['source'],
             "channelUtil": node.get('channel_utilization'),
             "airUtilTx": node.get('air_util_tx'),
+            "hasPowerSensor": node.get('has_power_sensor', False),
+            "hasEnvironmentSensor": node.get('has_environment_sensor', False),
+            "hasAirQualitySensor": node.get('has_air_quality_sensor', False),
             "positionTime": node.get('position_time').isoformat() if node.get('position_time') else None,
             "isFavorite": node_id in favs,
             "customLabel": labels.get(node_id),

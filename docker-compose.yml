@@ -3,6 +3,11 @@ services:
     image: postgres:16-alpine
     container_name: meshtastic-postgres
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       POSTGRES_DB: meshtastic
       POSTGRES_USER: meshuser
@@ -24,6 +29,11 @@ services:
     image: eclipse-mosquitto:latest
     container_name: meshtastic-mosquitto
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     volumes:
       - ./mosquitto/config:/mosquitto/config
       - ./mosquitto/data:/mosquitto/data
@@ -52,6 +62,17 @@ services:
     build: ./map
     container_name: meshtastic-map
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/nodes.geojson', timeout=5)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     environment:
       MQTT_HOST: mosquitto
       MQTT_PORT: "1883"

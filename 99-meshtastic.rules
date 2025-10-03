@@ -1,0 +1,17 @@
+# Meshtastic USB Device udev rules
+# This ensures stable device naming even after reconnection or reboot
+#
+# Installation:
+#   sudo cp 99-meshtastic.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules
+#   sudo udevadm trigger
+#
+# Then update docker-compose.yml:
+#   devices:
+#     - /dev/meshtastic-usb:/dev/ttyUSB0
+
+# Silicon Labs CP210x UART Bridge (common Meshtastic USB chip)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", SYMLINK+="meshtastic-usb", GROUP="dialout", MODE="0660"
+
+# Alternative: Match by serial number (if you have multiple devices)
+# SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", ATTRS{serial}=="0001", SYMLINK+="meshtastic-usb-0001", GROUP="dialout", MODE="0660"

@@ -118,26 +118,40 @@
     
     /* Bottom search bar */
     .search-bar {
-      background: #fff;
-      border-top: 1px solid #ddd;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: white;
       padding: 10px;
-      z-index: 1000;
-      flex-shrink: 0;
+      box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
       display: flex;
-      gap: 8px;
+      gap: 10px;
       align-items: center;
+      z-index: 1000;
     }
     
     .search-bar input[type="text"] {
-      flex: 1;
-      padding: 10px;
-      border: 1px solid #ccc;
+      flex: 0 0 250px;
+      padding: 8px;
+      border: 1px solid #ddd;
       border-radius: 4px;
-      font-size: 16px;
-      min-width: 0;
+      font-size: 14px;
     }
     
-    .search-bar label {
+    .search-bar select {
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      background: white;
+      cursor: pointer;
+      min-width: 180px;
+    }
+    
+    .search-bar select:hover {
+      border-color: #1976d2;
+    }    .search-bar label {
       display: inline-flex;
       align-items: center;
       gap: 4px;
@@ -360,6 +374,14 @@
   <!-- Bottom search bar -->
   <div class="search-bar">
     <input id="searchInput" type="text" placeholder="Search node..." autocomplete="off">
+    <select id="telemetryFilter">
+      <option value="all">Alle noder</option>
+      <option value="any_sensor">Noder med sensorer</option>
+      <option value="power">🔋 Strømsensor (INA219/INA260)</option>
+      <option value="environment">🌡️ Miljøsensor (BME680/Weather)</option>
+      <option value="air_quality">🍃 Luftkvalitet (PM/CO2)</option>
+      <option value="no_sensors">Kun enhetsmetrikk</option>
+    </select>
     <label><input type="checkbox" id="toggleTrails" checked> Trails</label>
     <button id="resetButton" class="reset-btn">Reset</button>
   </div>
@@ -403,6 +425,7 @@
     let allNodes = [];
     let favorites = new Set();
     let activeFilter = null;
+    let isFirstLoad = true;
     
     // Hide loading after map loads
     map.whenReady(() => {
@@ -413,6 +436,7 @@
     function resetView() {
       activeFilter = null;
       document.getElementById('searchInput').value = '';
+      document.getElementById('telemetryFilter').value = 'all';
       document.querySelectorAll('.filter-badge').forEach(b => b.classList.remove('active'));
       renderNodes();
       
@@ -584,11 +608,12 @@
           allNodes = data.features;
           renderNodes();
           
-          // Auto-zoom to show all nodes on first load
-          if (allNodes.length > 0 && nodesLayer.getLayers().length > 0) {
+          // Auto-zoom to show all nodes ONLY on first load
+          if (isFirstLoad && allNodes.length > 0 && nodesLayer.getLayers().length > 0) {
             const bounds = nodesLayer.getBounds();
             if (bounds.isValid()) {
               map.fitBounds(bounds, { padding: [50, 50] });
+              isFirstLoad = false; // Disable auto-zoom after first load
             }
           }
         })
@@ -626,6 +651,7 @@
       }
       
       const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+      const telemetryFilter = document.getElementById('telemetryFilter').value;
       
       // Clear all layers including labels
       nodesLayer.eachLayer(layer => {
@@ -650,6 +676,20 @@
         if (props.status === 'online') counts.online++;
         else if (props.status === 'recent') counts.recent++;
         else counts.offline++;
+        
+        // Apply telemetry filter
+        if (telemetryFilter !== 'all') {
+          const hasPower = props.hasPowerSensor;
+          const hasEnvironment = props.hasEnvironmentSensor;
+          const hasAirQuality = props.hasAirQualitySensor;
+          const hasAnySensor = hasPower || hasEnvironment || hasAirQuality;
+          
+          if (telemetryFilter === 'any_sensor' && !hasAnySensor) return;
+          if (telemetryFilter === 'power' && !hasPower) return;
+          if (telemetryFilter === 'environment' && !hasEnvironment) return;
+          if (telemetryFilter === 'air_quality' && !hasAirQuality) return;
+          if (telemetryFilter === 'no_sensors' && hasAnySensor) return;
+        }
         
         // Apply filter
         if (activeFilter === 'favorite' && !isFav) return;
@@ -797,6 +837,7 @@
     
     // Event listeners
     document.getElementById('searchInput').addEventListener('input', renderNodes);
+    document.getElementById('telemetryFilter').addEventListener('change', renderNodes);
     document.getElementById('toggleTrails').addEventListener('change', loadTrails);
     document.getElementById('resetButton').addEventListener('click', resetView);
     

@@ -42,5 +42,30 @@ sleep 5
 echo "Starting GeoJSON generator..."
 python /app/db_to_geojson_pg.py &
 
+echo "Starting daily cleanup task (removes nodes inactive >60 days)..."
+(
+  while true; do
+    # Run at 03:00 every night
+    sleep $(( (86400 + $(date -d "03:00 tomorrow" +%s) - $(date +%s)) % 86400 ))
+    echo "🧹 Running nightly node cleanup..."
+    python /app/cleanup_old_nodes.py
+  done
+) &
+
+echo "Starting nightly database backup task (runs at 02:00)..."
+(
+  while true; do
+    # Run at 02:00 every night
+    sleep $(( (86400 + $(date -d "02:00 tomorrow" +%s) - $(date +%s)) % 86400 ))
+    echo "💾 Running database backup..."
+    mkdir -p /data/backup
+    PGPASSWORD=meshpass2025 pg_dump -h postgres -U meshuser meshtastic | gzip > /data/backup/db_$(date +%Y%m%d_%H%M%S).sql.gz
+    echo "✓ Database backup completed: db_$(date +%Y%m%d_%H%M%S).sql.gz"
+    # Keep only last 14 days of backups
+    find /data/backup -name "db_*.sql.gz" -mtime +14 -delete
+    echo "✓ Old backups cleaned up (kept last 14 days)"
+  done
+) &
+
 echo "Starting web server on port 8080..."
 python -m http.server 8080 --directory "$DATA_DIR"

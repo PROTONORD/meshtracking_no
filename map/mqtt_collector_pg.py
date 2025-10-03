@@ -82,6 +82,7 @@ def parse_service_envelope(payload: bytes, topic: str) -> Optional[Dict[str, Any
         }
         
         # Parse different payload types
+        # Parse packet based on portnum
         if packet.decoded.portnum == portnums_pb2.POSITION_APP:
             pos = mesh_pb2.Position()
             pos.ParseFromString(packet.decoded.payload)
@@ -107,13 +108,74 @@ def parse_service_envelope(payload: bytes, topic: str) -> Optional[Dict[str, Any
         elif packet.decoded.portnum == portnums_pb2.TELEMETRY_APP:
             telem = telemetry_pb2.Telemetry()
             telem.ParseFromString(packet.decoded.payload)
+            
+            print(f"DEBUG: TELEMETRY_APP parsed. HasField device_metrics: {telem.HasField('device_metrics')}", flush=True)
+            
+            telemetry_data = {}
+            
+            # Device metrics (battery, voltage, etc.)
             if telem.HasField("device_metrics"):
-                result["telemetry"] = {
+                telemetry_data.update({
                     "battery_level": telem.device_metrics.battery_level,
                     "voltage": telem.device_metrics.voltage,
                     "channel_utilization": telem.device_metrics.channel_utilization,
                     "air_util_tx": telem.device_metrics.air_util_tx,
+                    "uptime_seconds": telem.device_metrics.uptime_seconds if hasattr(telem.device_metrics, 'uptime_seconds') else None,
+                })
+            
+            # Power metrics (INA219/INA260 external sensors)
+            if telem.HasField("power_metrics"):
+                pm = telem.power_metrics
+                telemetry_data["power_metrics"] = {
+                    "ch1_voltage": pm.ch1_voltage if pm.ch1_voltage > 0 else None,
+                    "ch1_current": pm.ch1_current if pm.ch1_current > 0 else None,
+                    "ch2_voltage": pm.ch2_voltage if pm.ch2_voltage > 0 else None,
+                    "ch2_current": pm.ch2_current if pm.ch2_current > 0 else None,
+                    "ch3_voltage": pm.ch3_voltage if pm.ch3_voltage > 0 else None,
+                    "ch3_current": pm.ch3_current if pm.ch3_current > 0 else None,
                 }
+            
+            # Environment metrics (weather, light, soil sensors)
+            if telem.HasField("environment_metrics"):
+                em = telem.environment_metrics
+                telemetry_data["environment_metrics"] = {
+                    "temperature": em.temperature if em.temperature != 0 else None,
+                    "relative_humidity": em.relative_humidity if em.relative_humidity != 0 else None,
+                    "barometric_pressure": em.barometric_pressure if em.barometric_pressure != 0 else None,
+                    "gas_resistance": em.gas_resistance if em.gas_resistance > 0 else None,
+                    "iaq": em.iaq if em.iaq > 0 else None,
+                    "distance": em.distance if em.distance > 0 else None,
+                    "lux": em.lux if em.lux >= 0 else None,
+                    "white_lux": em.white_lux if em.white_lux >= 0 else None,
+                    "ir_lux": em.ir_lux if em.ir_lux >= 0 else None,
+                    "uv_lux": em.uv_lux if em.uv_lux >= 0 else None,
+                    "wind_direction": em.wind_direction if em.wind_direction >= 0 else None,
+                    "wind_speed": em.wind_speed if em.wind_speed >= 0 else None,
+                    "wind_gust": em.wind_gust if em.wind_gust >= 0 else None,
+                    "wind_lull": em.wind_lull if em.wind_lull >= 0 else None,
+                    "weight": em.weight if em.weight > 0 else None,
+                    "radiation": em.radiation if em.radiation >= 0 else None,
+                    "rainfall_1h": em.rainfall_1h if em.rainfall_1h >= 0 else None,
+                    "rainfall_24h": em.rainfall_24h if em.rainfall_24h >= 0 else None,
+                    "soil_moisture": em.soil_moisture if em.soil_moisture >= 0 else None,
+                    "soil_temperature": em.soil_temperature if em.soil_temperature != 0 else None,
+                }
+            
+            # Air quality metrics (PM sensors, CO2, VOC, NOx)
+            if telem.HasField("air_quality_metrics"):
+                aq = telem.air_quality_metrics
+                telemetry_data["air_quality_metrics"] = {
+                    "pm10_standard": aq.pm10_standard if aq.pm10_standard > 0 else None,
+                    "pm25_standard": aq.pm25_standard if aq.pm25_standard > 0 else None,
+                    "pm100_standard": aq.pm100_standard if aq.pm100_standard > 0 else None,
+                    "co2": aq.co2 if aq.co2 > 0 else None,
+                    "voc_idx": aq.pm_voc_idx if hasattr(aq, 'pm_voc_idx') and aq.pm_voc_idx > 0 else None,
+                    "nox_idx": aq.pm_nox_idx if hasattr(aq, 'pm_nox_idx') and aq.pm_nox_idx > 0 else None,
+                }
+            
+            print(f"DEBUG: Parsed telemetry_data keys: {list(telemetry_data.keys())}", flush=True)
+            if telemetry_data:
+                result["telemetry"] = telemetry_data
         
         elif packet.decoded.portnum == portnums_pb2.TEXT_MESSAGE_APP:
             try:
@@ -251,6 +313,136 @@ def update_node(node_id: str, node_num: int, data: Dict[str, Any]) -> None:
                 'source': 'mqtt'
             })
         
+        # Store telemetry data
+        if "telemetry" in data:
+            print(f"DEBUG: Telemetry found for {node_id}", flush=True)
+            telem = data["telemetry"]
+            
+            # Build telemetry record with all fields initialized to None
+            telem_record = {
+                'node_id': node_id,
+                'timestamp': now,
+                'battery_level': telem.get('battery_level'),
+                'voltage': telem.get('voltage'),
+                'channel_utilization': telem.get('channel_utilization'),
+                'air_util_tx': telem.get('air_util_tx'),
+                'uptime_seconds': telem.get('uptime_seconds'),
+                # Power metrics
+                'ch1_voltage': None,
+                'ch1_current': None,
+                'ch2_voltage': None,
+                'ch2_current': None,
+                'ch3_voltage': None,
+                'ch3_current': None,
+                # Environment metrics
+                'temperature': None,
+                'relative_humidity': None,
+                'barometric_pressure': None,
+                'gas_resistance': None,
+                'iaq': None,
+                'distance': None,
+                'lux': None,
+                'white_lux': None,
+                'ir_lux': None,
+                'uv_lux': None,
+                'wind_direction': None,
+                'wind_speed': None,
+                'wind_gust': None,
+                'wind_lull': None,
+                'weight': None,
+                'radiation': None,
+                'rainfall_1h': None,
+                'rainfall_24h': None,
+                'soil_moisture': None,
+                'soil_temperature': None,
+                # Air quality metrics
+                'pm10_standard': None,
+                'pm25_standard': None,
+                'pm100_standard': None,
+                'co2': None,
+                'voc_idx': None,
+                'nox_idx': None,
+            }
+            
+            # Add power metrics if present
+            has_power = False
+            if "power_metrics" in telem:
+                pm = telem["power_metrics"]
+                if any(v is not None for v in pm.values()):  # Check if any power value is not None
+                    has_power = True
+                    telem_record.update(pm)
+            
+            # Add environment metrics if present
+            has_environment = False
+            if "environment_metrics" in telem:
+                em = telem["environment_metrics"]
+                if any(v is not None for v in em.values()):  # Check if any environment value is not None
+                    has_environment = True
+                    telem_record.update(em)
+            
+            # Add air quality metrics if present
+            has_air_quality = False
+            if "air_quality_metrics" in telem:
+                aq = telem["air_quality_metrics"]
+                if any(v is not None for v in aq.values()):  # Check if any air quality value is not None
+                    has_air_quality = True
+                    telem_record.update(aq)
+            
+            # Insert telemetry
+            try:
+                print(f"DEBUG: Storing telemetry for {node_id}: battery={telem_record.get('battery_level')}, voltage={telem_record.get('voltage')}", flush=True)
+                cursor.execute("""
+                    INSERT INTO telemetry (
+                        node_id, timestamp, battery_level, voltage, channel_utilization,
+                        air_util_tx, uptime_seconds,
+                        ch1_voltage, ch1_current, ch2_voltage, ch2_current,
+                        ch3_voltage, ch3_current,
+                        temperature, relative_humidity, barometric_pressure,
+                        gas_resistance, iaq, distance, lux, white_lux, ir_lux, uv_lux,
+                        wind_direction, wind_speed, wind_gust, wind_lull,
+                        weight, radiation, rainfall_1h, rainfall_24h,
+                        soil_moisture, soil_temperature,
+                        pm10_standard, pm25_standard, pm100_standard,
+                        co2, voc_idx, nox_idx,
+                        has_power_metrics, has_environment_metrics, has_air_quality_metrics
+                    ) VALUES (
+                        %(node_id)s, %(timestamp)s, %(battery_level)s, %(voltage)s,
+                        %(channel_utilization)s, %(air_util_tx)s, %(uptime_seconds)s,
+                        %(ch1_voltage)s, %(ch1_current)s, %(ch2_voltage)s, %(ch2_current)s,
+                        %(ch3_voltage)s, %(ch3_current)s,
+                        %(temperature)s, %(relative_humidity)s, %(barometric_pressure)s,
+                        %(gas_resistance)s, %(iaq)s, %(distance)s, %(lux)s, %(white_lux)s,
+                        %(ir_lux)s, %(uv_lux)s, %(wind_direction)s, %(wind_speed)s,
+                        %(wind_gust)s, %(wind_lull)s, %(weight)s, %(radiation)s,
+                        %(rainfall_1h)s, %(rainfall_24h)s, %(soil_moisture)s, %(soil_temperature)s,
+                        %(pm10_standard)s, %(pm25_standard)s, %(pm100_standard)s,
+                        %(co2)s, %(voc_idx)s, %(nox_idx)s,
+                        %(has_power)s, %(has_environment)s, %(has_air_quality)s
+                    )
+                """, {**telem_record, 'has_power': has_power, 
+                      'has_environment': has_environment, 
+                      'has_air_quality': has_air_quality})
+                print(f"DEBUG: Telemetry stored successfully for {node_id}", flush=True)
+            except Exception as e:
+                print(f"ERROR: Failed to store telemetry for {node_id}: {e}", flush=True)
+                import traceback
+                traceback.print_exc()
+            
+            # Update sensor flags in nodes table
+            if has_power or has_environment or has_air_quality:
+                cursor.execute("""
+                    UPDATE nodes SET
+                        has_power_sensor = COALESCE(%(has_power)s, has_power_sensor),
+                        has_environment_sensor = COALESCE(%(has_environment)s, has_environment_sensor),
+                        has_air_quality_sensor = COALESCE(%(has_air_quality)s, has_air_quality_sensor)
+                    WHERE node_id = %(node_id)s
+                """, {
+                    'node_id': node_id,
+                    'has_power': has_power,
+                    'has_environment': has_environment,
+                    'has_air_quality': has_air_quality
+                })
+        
         # Store text message if present
         if "text_message" in data:
             cursor.execute("""
@@ -309,6 +501,7 @@ def on_message(client, userdata, msg):
                 packet_type = "nodeinfo"
             elif "telemetry" in data:
                 packet_type = "telemetry"
+                print(f"DEBUG: Telemetry packet detected! Keys in data: {list(data.keys())}", flush=True)
             elif "text_message" in data:
                 packet_type = "message"
                 msg_preview = data['text_message'][:30] + "..." if len(data['text_message']) > 30 else data['text_message']

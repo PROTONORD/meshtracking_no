@@ -18,6 +18,6 @@ RUN pip install --no-cache-dir \
     netifaces==0.11.0
 
 WORKDIR /app
-COPY index.html mqtt_collector_pg.py node_poller.py node_api.py db_to_geojson_pg.py device_manager.py scan_network.sh run.sh AGENTS.md ./
+COPY index.html mqtt_collector_pg.py node_poller.py node_api.py db_to_geojson_pg.py device_manager.py cleanup_old_nodes.py scan_network.sh run.sh AGENTS.md ./
 
 ENTRYPOINT ["/app/run.sh"]
