@@ -115,6 +115,13 @@ def parse_service_envelope(payload: bytes, topic: str) -> Optional[Dict[str, Any
                     "air_util_tx": telem.device_metrics.air_util_tx,
                 }
         
+        elif packet.decoded.portnum == portnums_pb2.TEXT_MESSAGE_APP:
+            try:
+                message_text = packet.decoded.payload.decode('utf-8')
+                result["text_message"] = message_text
+            except Exception as e:
+                print(f"DEBUG: Failed to decode text message: {e}", flush=True)
+        
         # For MAP reports (position in user info)
         if "/map/" in topic and packet.decoded.portnum == portnums_pb2.MAP_REPORT_APP:
             user = mesh_pb2.User()
@@ -244,6 +251,26 @@ def update_node(node_id: str, node_num: int, data: Dict[str, Any]) -> None:
                 'source': 'mqtt'
             })
         
+        # Store text message if present
+        if "text_message" in data:
+            cursor.execute("""
+                INSERT INTO messages (
+                    from_node, to_node, channel, packet_id, timestamp,
+                    message_text, portnum, want_ack
+                ) VALUES (
+                    %(from_node)s, %(to_node)s, %(channel)s, %(packet_id)s,
+                    %(timestamp)s, %(message_text)s, 'TEXT_MESSAGE_APP', FALSE
+                )
+                ON CONFLICT DO NOTHING
+            """, {
+                'from_node': node_id,
+                'to_node': data.get('to'),
+                'channel': data.get('channel', 0),
+                'packet_id': data.get('packet_id', 0),
+                'timestamp': now,
+                'message_text': data['text_message']
+            })
+        
         conn.commit()
         
     except Exception as e:
@@ -282,6 +309,12 @@ def on_message(client, userdata, msg):
                 packet_type = "nodeinfo"
             elif "telemetry" in data:
                 packet_type = "telemetry"
+            elif "text_message" in data:
+                packet_type = "message"
+                msg_preview = data['text_message'][:30] + "..." if len(data['text_message']) > 30 else data['text_message']
+                print(f"💬 {packet_type}: {node_id} → \"{msg_preview}\" via {msg.topic}", flush=True)
+                update_node(node_id, node_num, data)
+                return
             
             print(f"📡 {packet_type}: {node_id} via {msg.topic}", flush=True)
             

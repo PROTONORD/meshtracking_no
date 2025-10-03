@@ -171,9 +171,29 @@ def generate_geojson(conn) -> None:
     """)
     
     nodes = cursor.fetchall()
+    
+    # Fetch recent messages for each node (last 5 messages per node)
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor.execute("""
+        SELECT DISTINCT ON (from_node, message_text)
+            from_node, to_node, message_text, timestamp
+        FROM messages
+        WHERE timestamp >= NOW() - INTERVAL '24 hours'
+        ORDER BY from_node, message_text, timestamp DESC
+    """)
+    
+    messages_by_node = defaultdict(list)
+    for msg in cursor.fetchall():
+        messages_by_node[msg['from_node']].append({
+            'text': msg['message_text'],
+            'timestamp': msg['timestamp'].isoformat(),
+            'to': msg['to_node']
+        })
+    
     cursor.close()
     
     print(f"📍 Found {len(nodes)} nodes with coordinates", flush=True)
+    print(f"💬 Found messages from {len(messages_by_node)} nodes", flush=True)
     
     # Build GeoJSON features
     features = []
@@ -201,6 +221,7 @@ def generate_geojson(conn) -> None:
             "isFavorite": node_id in favs,
             "customLabel": labels.get(node_id),
             "notes": notes.get(node_id),
+            "recentMessages": messages_by_node.get(node_id, [])[:5],  # Last 5 messages
             **time_data
         }
         

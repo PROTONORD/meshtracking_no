@@ -290,6 +290,40 @@
     .loading.hidden {
       display: none;
     }
+    
+    /* Node labels */
+    .node-label {
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+      pointer-events: none;
+    }
+    
+    .node-label.online {
+      border-color: #4CAF50;
+      color: #2e7d32;
+    }
+    
+    .node-label.recent {
+      border-color: #FFA726;
+      color: #e65100;
+    }
+    
+    .node-label.offline {
+      border-color: #999;
+      color: #666;
+    }
+    
+    .node-label.favorite {
+      border-color: #3388ff;
+      color: #1565c0;
+      font-weight: 700;
+    }
   </style>
 </head>
 <body>
@@ -345,6 +379,24 @@
       attribution: '© OpenStreetMap',
       maxZoom: 18
     }).addTo(map);
+    
+    // Handle label visibility on zoom
+    map.on('zoomend', function() {
+      const zoom = map.getZoom();
+      nodesLayer.eachLayer(layer => {
+        if (layer._labelMarker) {
+          if (zoom >= 10) {
+            if (!map.hasLayer(layer._labelMarker)) {
+              layer._labelMarker.addTo(map);
+            }
+          } else {
+            if (map.hasLayer(layer._labelMarker)) {
+              map.removeLayer(layer._labelMarker);
+            }
+          }
+        }
+      });
+    });
     
     let nodesLayer = L.featureGroup().addTo(map);
     let trailsLayer = L.layerGroup().addTo(map);
@@ -492,7 +544,28 @@
         }
       });
       
-      html += '</table></div>';
+      html += '</table>';
+      
+      // Add recent messages section if available
+      if (props.recentMessages && props.recentMessages.length > 0) {
+        html += '<div style="margin-top:15px; padding-top:10px; border-top:1px solid #eee;">';
+        html += '<h4 style="margin:0 0 8px 0; font-size:0.95em; color:#666;">💬 Recent Messages:</h4>';
+        props.recentMessages.forEach(msg => {
+          const msgTime = new Date(msg.timestamp).toLocaleString('no-NO', {
+            day: '2-digit',
+            month: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+          html += `<div style="margin:6px 0; padding:8px; background:#f8f9fa; border-radius:4px; font-size:0.9em;">
+            <div style="color:#666; font-size:0.85em; margin-bottom:3px;">${msgTime}</div>
+            <div style="word-wrap:break-word;">"${msg.text}"</div>
+          </div>`;
+        });
+        html += '</div>';
+      }
+      
+      html += '</div>';
       return html;
     }
     
@@ -609,6 +682,32 @@
           opacity: 1,
           fillOpacity: isLocal ? 0.9 : 0.7
         });
+        
+        // Add permanent label with long_name
+        const labelText = props.longName || props.shortName || props.nodeId.substring(1, 5);
+        let labelClass = 'node-label';
+        if (isFav) labelClass += ' favorite';
+        else if (props.status === 'online') labelClass += ' online';
+        else if (props.status === 'recent') labelClass += ' recent';
+        else labelClass += ' offline';
+        
+        const label = L.marker([f.geometry.coordinates[1], f.geometry.coordinates[0]], {
+          icon: L.divIcon({
+            className: labelClass,
+            html: labelText,
+            iconSize: null,
+            iconAnchor: [-8, 18]  // Position label above marker
+          })
+        });
+        
+        // Only show labels at zoom level 10+
+        const currentZoom = map.getZoom();
+        if (currentZoom >= 10) {
+          label.addTo(nodesLayer);
+        }
+        
+        // Update label visibility on zoom
+        marker._labelMarker = label;
         
         // Add isFavorite status to props for popup
         const popupProps = {...props, isFavorite: isFav};
