@@ -524,7 +524,7 @@
         ['─────────', '────────────'],
         ['Batteri', props.batteryLevel ? `${props.batteryLevel}%` : 'N/A'],
         ['Spenning', props.voltage ? `${props.voltage.toFixed(2)}V` : 'N/A'],
-        ['SNR', props.snr ? `${props.snr} dB` : 'N/A'],
+        ['SNR (vår måling)', props.snr ? `${props.snr} dB` : 'N/A'],
         ['Høyde', props.altitude ? `${Math.round(props.altitude)}m` : 'N/A'],
         ['Kanal util.', props.channelUtil ? `${props.channelUtil.toFixed(1)}%` : 'N/A'],
         ['Air util. TX', props.airUtilTx ? `${props.airUtilTx.toFixed(1)}%` : 'N/A'],
@@ -627,6 +627,12 @@
       
       const searchTerm = document.getElementById('searchInput').value.toLowerCase();
       
+      // Clear all layers including labels
+      nodesLayer.eachLayer(layer => {
+        if (layer._labelMarker && map.hasLayer(layer._labelMarker)) {
+          map.removeLayer(layer._labelMarker);
+        }
+      });
       nodesLayer.clearLayers();
       
       // Count nodes by status
