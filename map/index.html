@@ -660,15 +660,15 @@
         if (searchTerm && !searchable.includes(searchTerm)) return;
         
         // Determine color based on status
-        let color = '#3388ff';  // Default blue
+        let color = '#999999';  // Default grey for unknown/offline
         if (isFav) {
           color = '#3388ff';  // Blue for favorites
         } else if (props.status === 'online') {
           color = '#4CAF50';  // Green for online
         } else if (props.status === 'recent') {
           color = '#FFA726';  // Orange/yellow for recent
-        } else if (props.status === 'offline') {
-          color = '#999999';  // Grey for offline
+        } else {
+          color = '#999999';  // Grey for offline/unknown
         }
         
         // Determine if local node (USB/WiFi) or global (MQTT)
