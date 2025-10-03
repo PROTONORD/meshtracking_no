@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <!-- VERSION: 3.2.3 - Build 2025-10-03T21:00 - Fixed LatLng undefined error and API endpoint correction -->
+  <!-- VERSION: 3.4.4 - Build 2025-10-04T01:00 - PRODUCTION: Combined node+label interface with always visible labels -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Meshtastic Map v2.0 - LIVE TELEMETRI VERSJON</title>
@@ -237,7 +237,258 @@
     .leaflet-popup-content-wrapper {
       max-height: 80vh;
       overflow-y: auto;
-      max-width: calc(100vw - 40px);
+      max-width: calc(100vw - 80px); /* Increased side padding */
+      border-radius: 8px;
+      box-shadow: 0 3px 14px rgba(0,0,0,0.4);
+    }
+    
+    /* Popup positioning for better viewport centering */
+    .leaflet-popup {
+      margin-bottom: 20px;
+      z-index: 1000;
+    }
+    
+    /* Better popup tip positioning */
+    .leaflet-popup-tip-container {
+      width: 40px;
+      height: 20px;
+      position: absolute;
+      left: 50%;
+      margin-left: -20px;
+      overflow: hidden;
+      pointer-events: none;
+    }
+    
+    /* Hide default popup styling for orbital layout */
+    .leaflet-popup.orbital-popup .leaflet-popup-content-wrapper {
+      background: transparent;
+      border-radius: 0;
+      box-shadow: none;
+      border: none;
+      padding: 0;
+    }
+    
+    .leaflet-popup.orbital-popup .leaflet-popup-content {
+      margin: 0;
+      min-width: auto;
+      max-width: none;
+      padding: 0;
+    }
+    
+    .leaflet-popup.orbital-popup .leaflet-popup-tip {
+      display: none;
+    }
+    
+    /* ORBITAL POPUP SYSTEM - Revolutionary circular data layout */
+    .orbital-popup-container {
+      position: relative;
+      width: 600px;
+      height: 600px;
+      margin: 0 auto;
+      pointer-events: none;
+    }
+    
+    .orbital-center {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #4CAF50, #2196F3);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+      z-index: 1000;
+      pointer-events: auto;
+      border: 4px solid white;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    
+    .orbital-center:hover {
+      transform: translate(-50%, -50%) scale(1.1);
+      box-shadow: 0 12px 35px rgba(0,0,0,0.4);
+      border-color: #FFD700;
+      background: linear-gradient(135deg, #FFD700, #FF6B35) !important;
+    }
+    
+    .orbital-center:hover::after {
+      content: "✏️ Rediger";
+      position: absolute;
+      bottom: -30px;
+      font-size: 0.7em;
+      background: rgba(0,0,0,0.8);
+      color: white;
+      padding: 4px 8px;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+    
+    .orbital-center .node-name {
+      font-size: 0.9em;
+      text-align: center;
+      line-height: 1.1;
+      max-width: 100px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .orbital-center .node-id {
+      font-size: 0.7em;
+      opacity: 0.8;
+      font-family: monospace;
+    }
+    
+    .orbital-data-pod {
+      position: absolute;
+      width: 140px;
+      min-height: 80px;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 12px;
+      padding: 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+      border: 2px solid transparent;
+      transition: all 0.3s ease;
+      pointer-events: auto;
+      animation: orbitalFloat 8s ease-in-out infinite;
+    }
+    
+    .orbital-data-pod:hover {
+      transform: scale(1.05);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+      border-color: #2196F3;
+      z-index: 1001;
+    }
+    
+    .orbital-data-pod.environment {
+      border-color: #4CAF50;
+      animation-delay: 0s;
+    }
+    
+    .orbital-data-pod.power {
+      border-color: #FF9800;
+      animation-delay: 1s;
+    }
+    
+    .orbital-data-pod.network {
+      border-color: #9C27B0;
+      animation-delay: 2s;
+    }
+    
+    .orbital-data-pod.weather {
+      border-color: #607D8B;
+      animation-delay: 3s;
+    }
+    
+    .orbital-data-pod.air-quality {
+      border-color: #F44336;
+      animation-delay: 4s;
+    }
+    
+    .orbital-data-pod.info {
+      border-color: #2196F3;
+      animation-delay: 5s;
+    }
+    
+    .pod-title {
+      font-weight: 600;
+      font-size: 0.8em;
+      margin-bottom: 8px;
+      color: #333;
+      text-align: center;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 4px;
+    }
+    
+    .pod-content {
+      font-size: 0.75em;
+      line-height: 1.3;
+    }
+    
+    .pod-content div {
+      margin-bottom: 3px;
+    }
+    
+    .pod-content strong {
+      color: #555;
+    }
+    
+    /* Floating animation for orbital pods */
+    @keyframes orbitalFloat {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-10px); }
+    }
+    
+    /* Responsive orbital system */
+    @media (max-width: 768px) {
+      .orbital-popup-container {
+        width: 400px;
+        height: 400px;
+      }
+      
+      .orbital-center {
+        width: 80px;
+        height: 80px;
+      }
+      
+      .orbital-center .node-name {
+        font-size: 0.8em;
+      }
+      
+      .orbital-data-pod {
+        width: 100px;
+        min-height: 60px;
+        padding: 8px;
+      }
+      
+      .pod-title {
+        font-size: 0.7em;
+      }
+      
+      .pod-content {
+        font-size: 0.65em;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      .orbital-popup-container {
+        width: 320px;
+        height: 320px;
+      }
+      
+      .orbital-center {
+        width: 60px;
+        height: 60px;
+      }
+      
+      .orbital-center .node-name {
+        font-size: 0.7em;
+      }
+      
+      .orbital-data-pod {
+        width: 80px;
+        min-height: 50px;
+        padding: 6px;
+      }
+    }
+    
+    /* Ensure popup content fits in smaller screens */
+    @media (max-width: 480px) {
+      .leaflet-popup-content-wrapper {
+        max-width: calc(100vw - 40px);
+        max-height: calc(100vh - 120px);
+      }
+      
+      .leaflet-popup-content {
+        min-width: 260px;
+        max-width: calc(100vw - 80px);
+      }
     }
     
     /* Ensure all popup inputs and buttons fit within container */
@@ -330,26 +581,48 @@
     
     .node-label {
       background: rgba(255, 255, 255, 0.95);
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      padding: 2px 6px;
-      font-size: 11px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      padding: 4px 8px 4px 24px;  /* Extra padding left for icon */
+      font-size: 12px;
       font-weight: 600;
       white-space: nowrap;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
       pointer-events: auto;
       cursor: pointer;
       transition: transform 0.2s, box-shadow 0.2s;
       z-index: 1000;
       position: relative;
       display: inline-block;
+      transform: translateY(-10px);  /* Move label slightly above node */
+      min-height: 24px;
+      line-height: 16px;
+    }
+    
+    .node-label::before {
+      content: '';
+      position: absolute;
+      left: 4px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #999;
+      border: 2px solid #fff;
     }
     
     .node-label:hover {
-      transform: scale(1.05);
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      transform: translateY(-10px) scale(1.05);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
       z-index: 1001;
       background: rgba(255, 255, 255, 1);
+      border-color: #3388ff;
+    }
+    
+    .node-label:active {
+      transform: translateY(-10px) scale(0.98);
+      background: rgba(51, 136, 255, 0.1);
     }
     
     .node-label.online {
@@ -357,9 +630,17 @@
       color: #2e7d32;
     }
     
+    .node-label.online::before {
+      background: #4CAF50;
+    }
+    
     .node-label.recent {
       border-color: #FFA726;
       color: #e65100;
+    }
+    
+    .node-label.recent::before {
+      background: #FFA726;
     }
     
     .node-label.offline {
@@ -367,10 +648,47 @@
       color: #666;
     }
     
+    .node-label.offline::before {
+      background: #999;
+    }
+    
     .node-label.favorite {
       border-color: #3388ff;
       color: #1565c0;
       font-weight: 700;
+      background: rgba(51, 136, 255, 0.05);
+    }
+    
+    .node-label.favorite::before {
+      background: #3388ff;
+      border-color: #fff;
+      box-shadow: 0 0 0 1px #3388ff;
+    }
+    
+    /* Stacked label positioning */
+    .node-label.stacked-1 {
+      transform: translateY(-45px);
+    }
+    .node-label.stacked-2 {
+      transform: translateY(-80px);
+    }
+    .node-label.stacked-3 {
+      transform: translateY(-115px);
+    }
+    .node-label.stacked-4 {
+      transform: translateY(-150px);
+    }
+    .node-label.stacked-1:hover {
+      transform: translateY(-45px) scale(1.05);
+    }
+    .node-label.stacked-2:hover {
+      transform: translateY(-80px) scale(1.05);
+    }
+    .node-label.stacked-3:hover {
+      transform: translateY(-115px) scale(1.05);
+    }
+    .node-label.stacked-4:hover {
+      transform: translateY(-150px) scale(1.05);
     }
     
     /* Sidebar for node management */
@@ -1159,15 +1477,22 @@
         padding: 1px 4px;
       }
       
-      /* Popup adjustments */
+      /* Popup adjustments for mobile */
       .leaflet-popup-content {
-        min-width: 260px;
-        max-width: calc(100vw - 60px);
+        min-width: 240px; /* Smaller minimum width */
+        max-width: calc(100vw - 80px); /* More conservative mobile width */
         font-size: 0.9em;
+        margin: 8px; /* Reduced margin for mobile */
       }
       
       .leaflet-popup-content-wrapper {
-        max-width: calc(100vw - 40px);
+        max-width: calc(100vw - 60px);
+        max-height: 75vh; /* Slightly less height to ensure visibility */
+      }
+      
+      /* Ensure popup doesn't exceed viewport on mobile */
+      .leaflet-popup {
+        margin-bottom: 30px;
       }
       
       /* Search results mobile */
@@ -1724,19 +2049,8 @@
     // Handle label visibility on zoom
     map.on('zoomend', function() {
       const zoom = map.getZoom();
-      nodesLayer.eachLayer(layer => {
-        if (layer._labelMarker) {
-          if (zoom >= 10) {
-            if (!map.hasLayer(layer._labelMarker)) {
-              layer._labelMarker.addTo(map);
-            }
-          } else {
-            if (map.hasLayer(layer._labelMarker)) {
-              map.removeLayer(layer._labelMarker);
-            }
-          }
-        }
-      });
+      // Re-render nodes to update label visibility based on new zoom level
+      renderNodes();
     });
     
     let nodesLayer = L.featureGroup().addTo(map);
@@ -1966,15 +2280,15 @@
       if (props.positionSource === 'manual') {
         posInfo.innerHTML = `
           <div style="font-weight: 600; margin-bottom: 4px;">Manuell posisjon:</div>
-          <div style="font-family: monospace; color: #333;">${props.latitude.toFixed(6)}, ${props.longitude.toFixed(6)}</div>
+          <div style="font-family: monospace; color: #333;">${props.latitude && props.longitude ? `${props.latitude.toFixed(6)}, ${props.longitude.toFixed(6)}` : 'Ikke satt'}</div>
           ${props.altitude ? `<div style="color: #666;">Høyde: ${props.altitude}m</div>` : ''}
-          ${props.address ? `<div style="color: #666;">${props.address}</div>` : ''}
+          ${props.manualAddress ? `<div style="color: #666;">${props.manualAddress}</div>` : ''}
         `;
         removeBtn.style.display = 'block';
       } else if (props.positionSource === 'gps') {
         posInfo.innerHTML = `
           <div style="font-weight: 600; margin-bottom: 4px;">GPS posisjon:</div>
-          <div style="font-family: monospace; color: #333;">${props.latitude.toFixed(6)}, ${props.longitude.toFixed(6)}</div>
+          <div style="font-family: monospace; color: #333;">${props.latitude && props.longitude ? `${props.latitude.toFixed(6)}, ${props.longitude.toFixed(6)}` : 'Ikke satt'}</div>
           ${props.altitude ? `<div style="color: #666;">Høyde: ${props.altitude}m</div>` : ''}
           <div style="color: #4CAF50; font-size: 0.85em; margin-top: 4px;">📡 Fra GPS</div>
         `;
@@ -2099,6 +2413,11 @@
     });
     
     function createPopupContent(props) {
+      // Use orbital layout for a revolutionary new experience
+      return createOrbitalPopupContent(props);
+    }
+    
+    function createOrbitalPopupContent(props) {
       const isFav = props.isFavorite;
       
       // Status indicator
@@ -2115,29 +2434,104 @@
         statusText = 'Offline';
       }
       
-      let html = `<div class="popup" id="popup-${props.nodeId}">
-        <h3>
-          ${props.longName || props.nodeId}
-          <div style="display:flex; gap:8px; align-items:center;">
-            <button class="fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${props.nodeId}')">
-              ${isFav ? '★ Favoritt' : '☆ Legg til'}
-            </button>
-            <div id="live-indicator-${props.nodeId}" style="font-size:0.7em; color:#4CAF50; font-weight:normal; display:none;">
-              🔴 LIVE
+      return `
+        <div class="orbital-popup-container">
+          <!-- Central Node -->
+          <div class="orbital-center" 
+               style="background: linear-gradient(135deg, ${statusColor}, #2196F3); cursor: pointer;" 
+               onclick="handleEditClick('${props.nodeId}')"
+               title="Klikk for å redigere node">
+            <div class="node-name">${props.shortName || props.nodeId.slice(-4)}</div>
+            <div class="node-id">${statusText}</div>
+          </div>
+          
+          <!-- Environment Pod (Top) -->
+          <div class="orbital-data-pod environment" style="top: 20px; left: 50%; transform: translateX(-50%);">
+            <div class="pod-title">🌡️ Miljø</div>
+            <div class="pod-content">
+              <div><strong>Temp:</strong> ${props.temperature ? `${props.temperature.toFixed(1)}°C` : 'N/A'}</div>
+              <div><strong>Fukt:</strong> ${props.relativeHumidity ? `${props.relativeHumidity.toFixed(1)}%` : 'N/A'}</div>
+              <div><strong>Trykk:</strong> ${props.barometricPressure ? `${props.barometricPressure.toFixed(1)} hPa` : 'N/A'}</div>
             </div>
           </div>
-        </h3>
-        <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
-          <div style="flex:1; padding:6px; background:${statusColor}22; border-left:3px solid ${statusColor}; border-radius:3px;">
-            <strong style="color:${statusColor}">⬤ ${statusText}</strong>
+          
+          <!-- Power Pod (Top Right) -->
+          <div class="orbital-data-pod power" style="top: 80px; right: 80px;">
+            <div class="pod-title">🔋 Kraft</div>
+            <div class="pod-content">
+              <div><strong>Batteri:</strong> ${props.batteryLevel ? `${props.batteryLevel}%` : 'N/A'}</div>
+              <div><strong>Spenning:</strong> ${props.voltage ? `${props.voltage.toFixed(2)}V` : 'N/A'}</div>
+              <div><strong>SNR:</strong> ${props.snr ? `${props.snr} dB` : 'N/A'}</div>
+            </div>
           </div>
-          <button onclick="handleEditClick('${props.nodeId}')" style="background:#2196F3; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:0.9em; white-space:nowrap;">
-            ✏️ Rediger
-          </button>
+          
+          <!-- Network Pod (Right) -->
+          <div class="orbital-data-pod network" style="top: 50%; right: 20px; transform: translateY(-50%);">
+            <div class="pod-title">📡 Nettverk</div>
+            <div class="pod-content">
+              <div><strong>Kanal:</strong> ${props.channelUtil ? `${props.channelUtil.toFixed(1)}%` : 'N/A'}</div>
+              <div><strong>Air TX:</strong> ${props.airUtilTx ? `${props.airUtilTx.toFixed(1)}%` : 'N/A'}</div>
+              <div><strong>Kilde:</strong> ${props.source || 'ukjent'}</div>
+            </div>
+          </div>
+          
+          <!-- Weather Pod (Bottom Right) -->
+          <div class="orbital-data-pod weather" style="bottom: 80px; right: 80px;">
+            <div class="pod-title">☀️ Vær</div>
+            <div class="pod-content">
+              <div><strong>Vind:</strong> ${props.windSpeed ? `${props.windSpeed.toFixed(1)} m/s` : 'N/A'}</div>
+              <div><strong>Retning:</strong> ${props.windDirection ? `${props.windDirection}°` : 'N/A'}</div>
+              <div><strong>Høyde:</strong> ${props.altitude ? `${Math.round(props.altitude)}m` : 'N/A'}</div>
+            </div>
+          </div>
+          
+          <!-- Air Quality Pod (Bottom) -->
+          <div class="orbital-data-pod air-quality" style="bottom: 20px; left: 50%; transform: translateX(-50%);">
+            <div class="pod-title">🌬️ Luftkvalitet</div>
+            <div class="pod-content">
+              <div><strong>PM2.5:</strong> ${props.pm25Standard ? `${props.pm25Standard} μg/m³` : 'N/A'}</div>
+              <div><strong>PM10:</strong> ${props.pm10Standard ? `${props.pm10Standard} μg/m³` : 'N/A'}</div>
+              <div><strong>IAQ:</strong> ${props.iaq ? `${props.iaq}` : 'N/A'}</div>
+            </div>
+          </div>
+          
+          <!-- Info Pod (Bottom Left) -->
+          <div class="orbital-data-pod info" style="bottom: 80px; left: 80px;">
+            <div class="pod-title">ℹ️ Info</div>
+            <div class="pod-content">
+              <div><strong>ID:</strong> ${props.nodeId}</div>
+              <div><strong>HW:</strong> ${props.hwModel || 'Ukjent'}</div>
+              <div><strong>Rolle:</strong> ${props.role || 'CLIENT'}</div>
+            </div>
+          </div>
+          
+          <!-- Time Pod (Left) -->
+          <div class="orbital-data-pod info" style="top: 50%; left: 20px; transform: translateY(-50%);">
+            <div class="pod-title">🕐 Tid</div>
+            <div class="pod-content">
+              <div><strong>Sist sett:</strong></div>
+              <div style="font-size: 0.9em;">${props.lastHeardNorwegian || 'N/A'}</div>
+              <div><strong>For:</strong> ${props.lastHeardAgoSec ? formatDuration(props.lastHeardAgoSec) : 'N/A'}</div>
+            </div>
+          </div>
+          
+          <!-- Control Pod (Top Left) -->
+          <div class="orbital-data-pod info" style="top: 80px; left: 80px;">
+            <div class="pod-title">⚙️ Kontroll</div>
+            <div class="pod-content" style="text-align: center;">
+              <button class="fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${props.nodeId}')" 
+                      style="width: 100%; padding: 8px; font-size: 0.75em; border-radius: 6px;">
+                ${isFav ? '★ Favoritt' : '☆ Legg til'}
+              </button>
+              <div style="margin-top: 8px; font-size: 0.65em; color: #666; text-align: center;">
+                💡 Klikk på senter-ikonet for å redigere
+              </div>
+            </div>
+          </div>
         </div>
         
-        <!-- Edit mode section (hidden by default) -->
-        <div id="edit-section-${props.nodeId}" style="display:none; margin-bottom:15px; padding:12px; background:#f8f9fa; border-radius:6px; border:2px solid #2196F3;">
+        <!-- Hidden edit section for compatibility -->
+        <div id="edit-section-${props.nodeId}" style="display:none; margin-top: 20px; padding:12px; background:#f8f9fa; border-radius:6px; border:2px solid #2196F3;">
           <h4 style="margin:0 0 10px 0; font-size:0.95em; color:#333;">🏷️ Tags</h4>
           <div id="popup-tags-${props.nodeId}" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;">
             ${props.tags && props.tags.length > 0 ? 
@@ -2165,99 +2559,15 @@
             </button>
           </div>
           
-          <h4 style="margin:12px 0 8px 0; font-size:0.95em; color:#333;">📍 Manuell posisjon</h4>
-          <div style="margin-bottom:8px; font-size:0.85em; color:#666;">
-            ${props.positionSource === 'manual' ? 
-              `<div style="color:#FF9800;">✓ Manuell posisjon aktiv</div>` : 
-              props.latitude ? 
-                `<div style="color:#4CAF50;">✓ GPS-posisjon</div>` : 
-                `<div style="color:#999;">Ingen posisjon</div>`
-            }
-            <div style="margin-top:4px; font-style:italic;">Minst ett felt må fylles (koordinater eller adresse)</div>
-          </div>
-          <div style="display:flex; flex-direction:column; gap:6px; width:100%;">
-            <input type="number" id="popup-lat-${props.nodeId}" placeholder="Latitude (valgfri)" step="0.000001"
-                   style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:16px; box-sizing:border-box;">
-            <input type="number" id="popup-lon-${props.nodeId}" placeholder="Longitude (valgfri)" step="0.000001"
-                   style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:16px; box-sizing:border-box;">
-            <div class="address-autocomplete">
-              <input type="text" id="popup-addr-${props.nodeId}" placeholder="Søk adresse (f.eks. Sentrum, Tromsø)" autocomplete="off"
-                     style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:16px; box-sizing:border-box;"
-                     oninput="handleAddressInput(this, '${props.nodeId}', 'popup')" 
-                     onkeydown="handleAddressKeydown(event, '${props.nodeId}', 'popup')"
-                     onfocus="showAddressSuggestions('${props.nodeId}', 'popup')"
-                     onblur="hideAddressSuggestions('${props.nodeId}', 'popup')">
-              <div id="popup-addr-suggestions-${props.nodeId}" class="address-suggestions"></div>
-            </div>
-            <div style="display:flex; gap:6px;">
-              <button onclick="savePositionFromPopup('${props.nodeId}')" 
-                      style="flex:1; background:#2196F3; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer; font-size:0.85em;">
-                💾 Lagre posisjon
-              </button>
-              ${props.positionSource === 'manual' ? 
-                `<button onclick="removePositionFromPopup('${props.nodeId}')" 
-                        style="background:#f44336; color:white; border:none; padding:8px 12px; border-radius:4px; cursor:pointer; font-size:0.85em;">
-                  🗑️
-                </button>` : ''
-              }
-            </div>
-          </div>
+          <h4 style="margin:12px 0 8px 0; font-size:0.95em; color:#333;">📝 Notater</h4>
+          <textarea id="popup-notes-${props.nodeId}" placeholder="Legg til notater om denne noden..." 
+                    style="width:100%; height:80px; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:14px; resize:vertical; box-sizing:border-box;">${props.notes || ''}</textarea>
+          <button onclick="savePopupNotes('${props.nodeId}')" 
+                  style="width:100%; margin-top:8px; background:#4CAF50; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer; font-size:14px;">
+            💾 Lagre notater
+          </button>
         </div>
-        
-        <table id="telemetry-table-${props.nodeId}">`;
-      
-      const rows = [
-        ['Node ID', props.nodeId],
-        ['Kortnavn', props.shortName],
-        ['Hardware', props.hwModel || 'Ukjent'],
-        ['Rolle', props.role || 'CLIENT'],
-        ['Kilde', props.source || 'ukjent'],
-        ['─────────', '────────────'],
-        ['Batteri', props.batteryLevel ? `${props.batteryLevel}%` : 'N/A'],
-        ['Spenning', props.voltage ? `${props.voltage.toFixed(2)}V` : 'N/A'],
-        ['SNR (vår måling)', props.snr ? `${props.snr} dB` : 'N/A'],
-        ['Høyde', props.altitude ? `${Math.round(props.altitude)}m` : 'N/A'],
-        ['Kanal util.', props.channelUtil ? `${props.channelUtil.toFixed(1)}%` : 'N/A'],
-        ['Air util. TX', props.airUtilTx ? `${props.airUtilTx.toFixed(1)}%` : 'N/A'],
-        ['─────────', '────────────'],
-        ['Sist sett', props.lastHeardNorwegian || 'N/A'],
-        ['For', props.lastHeardAgoSec ? formatDuration(props.lastHeardAgoSec) : 'N/A']
-      ];
-      
-      if (props.customLabel) rows.unshift(['Label', props.customLabel]);
-      if (props.notes) rows.push(['Notater', props.notes]);
-      
-      rows.forEach(([key, val]) => {
-        if (key === '─────────') {
-          html += `<tr style="height:2px; background:#eee"><td colspan="2"></td></tr>`;
-        } else if (val && val !== 'N/A') {
-          html += `<tr><th>${key}:</th><td>${val}</td></tr>`;
-        }
-      });
-      
-      html += '</table>';
-      
-      // Add recent messages section if available
-      if (props.recentMessages && props.recentMessages.length > 0) {
-        html += '<div style="margin-top:15px; padding-top:10px; border-top:1px solid #eee;">';
-        html += '<h4 style="margin:0 0 8px 0; font-size:0.95em; color:#666;">💬 Recent Messages:</h4>';
-        props.recentMessages.forEach(msg => {
-          const msgTime = new Date(msg.timestamp).toLocaleString('no-NO', {
-            day: '2-digit',
-            month: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit'
-          });
-          html += `<div style="margin:6px 0; padding:8px; background:#f8f9fa; border-radius:4px; font-size:0.9em;">
-            <div style="color:#666; font-size:0.85em; margin-bottom:3px;">${msgTime}</div>
-            <div style="word-wrap:break-word;">"${msg.text}"</div>
-          </div>`;
-        });
-        html += '</div>';
-      }
-      
-      html += '</div>';
-      return html;
+      `;
     }
     
     function formatDuration(seconds) {
@@ -2289,7 +2599,7 @@
     }
     
     // Function to check if two positions are within clustering distance
-    function areNodesClose(lat1, lon1, lat2, lon2, distanceMeters = 10) {
+    function areNodesClose(lat1, lon1, lat2, lon2, distanceMeters = 50) {  // 50 meters for reasonable clustering
       const R = 6371000; // Earth radius in meters
       const dLat = (lat2 - lat1) * Math.PI / 180;
       const dLon = (lon2 - lon1) * Math.PI / 180;
@@ -2440,37 +2750,13 @@
         const centerLat = centerFeature.geometry.coordinates[1];
         const centerLon = centerFeature.geometry.coordinates[0];
         
-        // Render each node in the cluster
+        // Render each node in the cluster as a combined label+icon
         clusterFeatures.forEach((ff, stackIndex) => {
           const f = ff.feature;
           const props = ff.props;
           const isFav = ff.isFav;
           
-          // Determine color based on status
-          let color = '#999999';  // Default grey for unknown/offline
-          if (isFav) {
-            color = '#3388ff';  // Blue for favorites
-          } else if (props.status === 'online') {
-            color = '#4CAF50';  // Green for online
-          } else if (props.status === 'recent') {
-            color = '#FFA726';  // Orange/yellow for recent
-          } else {
-            color = '#999999';  // Grey for offline/unknown
-          }
-          
-          // Determine if local node (USB/WiFi) or global (MQTT)
-          const isLocal = props.source && (props.source.includes('USB') || props.source.includes('WiFi'));
-          
-          const marker = L.circleMarker([f.geometry.coordinates[1], f.geometry.coordinates[0]], {
-            radius: isFav ? 8 : (isLocal ? 7 : 6),
-            fillColor: color,
-            color: isLocal ? '#000' : '#fff',  // Black ring for local, white for MQTT
-            weight: isLocal ? 2.5 : 1.5,
-            opacity: 1,
-            fillOpacity: isLocal ? 0.9 : 0.7
-          });
-          
-          // Add permanent label with long_name (stacked vertically for clusters)
+          // Create combined label with node name and status icon
           const labelText = props.longName || props.shortName || props.nodeId.substring(1, 5);
           let labelClass = 'node-label';
           if (isFav) labelClass += ' favorite';
@@ -2478,49 +2764,67 @@
           else if (props.status === 'recent') labelClass += ' recent';
           else labelClass += ' offline';
           
-          // Calculate vertical offset for stacked labels (25px per label)
-          const verticalOffset = 18 + (stackIndex * 25);
+          // Calculate vertical offset for stacked labels (only for true overlapping nodes)
+          const isOverlapping = clusterFeatures.length > 1;
           
-          const label = L.marker([centerLat, centerLon], {
+          // Add stacking class if needed
+          if (isOverlapping && stackIndex > 0) {
+            labelClass += ` stacked-${stackIndex}`;
+          }
+          
+          // Create the combined label marker (replaces both node marker and label)
+          const labelLat = f.geometry.coordinates[1];
+          const labelLon = f.geometry.coordinates[0];
+          
+          const labelMarker = L.marker([labelLat, labelLon], {
             icon: L.divIcon({
               className: labelClass,
               html: labelText,
-              iconSize: null,
-              iconAnchor: [-8, verticalOffset]  // Stack labels vertically
+              iconSize: [120, 24],  // Fixed size for better positioning
+              iconAnchor: [60, 12]  // Center horizontally, position at base of label
             })
           });
           
-          // Only show labels at zoom level 10+
+          // Always show labels (improved visibility)
           const currentZoom = map.getZoom();
-          if (currentZoom >= 10) {
-            label.addTo(nodesLayer);
-          }
+          labelMarker.addTo(nodesLayer);
           
-          // Store reference to marker in label for click handling
-          label._nodeMarker = marker;
-          
-          // Make label clickable - opens the associated marker's popup and zooms to it
-          label.on('click', function() {
-            // Zoom to node location
-            map.setView([props.latitude, props.longitude], Math.max(map.getZoom(), 13), {
+          // Make label clickable - opens popup and zooms to node
+          labelMarker.on('click', function(e) {
+            // Prevent event bubbling
+            L.DomEvent.stopPropagation(e);
+            
+            console.log('Label clicked for node:', props.nodeId);
+            
+            // Close any existing popups first
+            map.closePopup();
+            
+            // Use geometry coordinates consistently
+            const lat = f.geometry.coordinates[1];
+            const lon = f.geometry.coordinates[0];
+            
+            // Force refresh popup content
+            const popupProps = {...props, isFavorite: isFav, latitude: lat, longitude: lon};
+            const popupContent = createPopupContent(popupProps);
+            
+            // Create popup and attach to label marker
+            labelMarker.bindPopup(popupContent, getResponsivePopupOptions());
+            
+            // Zoom to node location first
+            map.setView([lat, lon], Math.max(map.getZoom(), 13), {
               animate: true,
-              duration: 0.5
+              duration: 0.3
             });
-            // Small delay to ensure zoom happens before popup opens
+            
+            // Open popup after a brief delay
             setTimeout(() => {
-              marker.openPopup();
-            }, 200);
+              labelMarker.openPopup();
+              console.log('Popup opened for node:', props.nodeId);
+            }, 350);
           });
           
-          // Update label visibility on zoom
-          marker._labelMarker = label;
-          
-          // Add isFavorite status to props for popup
-          const popupProps = {...props, isFavorite: isFav};
-          marker.bindPopup(createPopupContent(popupProps), { maxWidth: 300 });
-          
           // Add click event to zoom to node when popup opens
-          marker.on('popupopen', function() {
+          labelMarker.on('popupopen', function() {
             // Zoom to node location with some padding - use geometry coordinates
             const lat = f.geometry.coordinates[1];
             const lon = f.geometry.coordinates[0];
@@ -2538,11 +2842,11 @@
           });
           
           // Stop live updates when popup closes
-          marker.on('popupclose', function() {
+          labelMarker.on('popupclose', function() {
             stopLiveNodeUpdate();
           });
           
-          marker.addTo(nodesLayer);
+          // No need to add marker separately - labelMarker is already added above
           displayed++;
         });
       });
@@ -2588,6 +2892,9 @@
         const stored = localStorage.getItem('favorites');
         if (stored) {
           favorites = new Set(JSON.parse(stored));
+          console.log('Loaded favorites from localStorage:', Array.from(favorites));
+        } else {
+          console.log('No favorites found in localStorage');
         }
       } catch (e) {
         console.error('Failed to load favorites:', e);
@@ -3661,15 +3968,15 @@
           if (props.positionSource === 'manual') {
             posInfo.innerHTML = `
               <div style="font-weight: 600; margin-bottom: 4px;">Manuell posisjon:</div>
-              <div style="font-family: monospace; color: #333;">${props.latitude.toFixed(6)}, ${props.longitude.toFixed(6)}</div>
+              <div style="font-family: monospace; color: #333;">${props.latitude && props.longitude ? `${props.latitude.toFixed(6)}, ${props.longitude.toFixed(6)}` : 'Ikke satt'}</div>
               ${props.altitude ? `<div style="color: #666;">Høyde: ${props.altitude}m</div>` : ''}
-              ${props.address ? `<div style="color: #666;">${props.address}</div>` : ''}
+              ${props.manualAddress ? `<div style="color: #666;">${props.manualAddress}</div>` : ''}
             `;
             removeBtn.style.display = 'block';
           } else if (props.positionSource === 'gps') {
             posInfo.innerHTML = `
               <div style="font-weight: 600; margin-bottom: 4px;">GPS posisjon:</div>
-              <div style="font-family: monospace; color: #333;">${props.latitude.toFixed(6)}, ${props.longitude.toFixed(6)}</div>
+              <div style="font-family: monospace; color: #333;">${props.latitude && props.longitude ? `${props.latitude.toFixed(6)}, ${props.longitude.toFixed(6)}` : 'Ikke tilgjengelig'}</div>
               ${props.altitude ? `<div style="color: #666;">Høyde: ${props.altitude}m</div>` : ''}
               <div style="color: #4CAF50; font-size: 0.85em; margin-top: 4px;">📡 Fra GPS</div>
             `;
@@ -3873,6 +4180,38 @@
         }
       } catch (error) {
         console.error('Error saving desktop notes:', error);
+        alert('❌ Feil ved lagring av notater');
+      }
+    }
+
+    // Save notes from orbital popup
+    async function savePopupNotes(nodeId) {
+      const notes = document.getElementById(`popup-notes-${nodeId}`).value.trim();
+      
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(nodeId)}/notes`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`
+          },
+          body: JSON.stringify({ notes })
+        });
+        
+        if (response.ok) {
+          alert('✅ Notater lagret!');
+          await loadNodes(); // Reload map data
+          
+          // Close the edit section after saving
+          const editSection = document.getElementById(`edit-section-${nodeId}`);
+          if (editSection) {
+            editSection.style.display = 'none';
+          }
+        } else {
+          alert('❌ Feil ved lagring av notater');
+        }
+      } catch (error) {
+        console.error('Error saving popup notes:', error);
         alert('❌ Feil ved lagring av notater');
       }
     }
@@ -4103,6 +4442,41 @@
       }, 200);
     }
     
+    // Responsive popup configuration
+    function getResponsivePopupOptions() {
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      
+      // Orbital popup needs more space - adapt to different screen sizes
+      let orbitalSize = 600;
+      if (viewportWidth < 768) orbitalSize = 400;
+      if (viewportWidth < 480) orbitalSize = 320;
+      
+      return {
+        maxWidth: Math.min(orbitalSize + 40, viewportWidth * 0.95),
+        maxHeight: Math.min(orbitalSize + 40, viewportHeight * 0.90),
+        autoPan: true,
+        // More aggressive padding for orbital layout
+        autoPanPaddingTopLeft: [30, 30],
+        autoPanPaddingBottomRight: [30, 80],
+        closeOnEscapeKey: true,
+        // No offset - let the orbital design center itself
+        offset: [0, 0],
+        // Force keep in view
+        keepInView: true,
+        // Minimal auto-panning for orbital layout
+        autoPanPadding: [10, 10],
+        // Remove default popup styling
+        className: 'orbital-popup'
+      };
+    }
+    
+    // Update popup sizes on window resize
+    window.addEventListener('resize', function() {
+      // Close any open popups on resize to prevent sizing issues
+      map.closePopup();
+    });
+    
     // Create a node marker with all standard styling and functionality
     function createNodeMarker(lat, lon, props) {
       const isFav = favorites.has(props.nodeId);
@@ -4171,18 +4545,33 @@
       // Update label visibility on zoom
       marker._labelMarker = label;
       
-      // Add popup
+      // Add popup with responsive configuration
       const popupProps = {...props, isFavorite: isFav};
-      marker.bindPopup(createPopupContent(popupProps), { maxWidth: 300 });
+      marker.bindPopup(createPopupContent(popupProps), getResponsivePopupOptions());
       
-      // Add click event to zoom to node when popup opens
-      marker.on('popupopen', function() {
+      // Add click event to center popup when opened - simplified approach
+      marker.on('popupopen', function(e) {
         setTimeout(() => {
-          map.setView([lat, lon], Math.max(map.getZoom(), 13), {
+          // Simple approach - just ensure the marker is centered in viewport
+          const currentZoom = map.getZoom();
+          const targetZoom = Math.max(currentZoom, 12);
+          
+          // Center on the node location with good zoom level
+          map.setView([lat, lon], targetZoom, {
             animate: true,
-            duration: 0.5
+            duration: 0.5,
+            // Ensure popup area is visible
+            pan: { animate: true, duration: 0.5 }
           });
-        }, 100);
+          
+          // Additional pan after popup is fully rendered
+          setTimeout(() => {
+            map.panTo([lat, lon], {
+              animate: true,
+              duration: 0.3
+            });
+          }, 200);
+        }, 150);
       });
       
       return marker;

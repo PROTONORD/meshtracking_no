@@ -2,6 +2,84 @@
 
 All notable changes to the Meshtastic Docker System will be documented in this file.
 
+## [3.4.4] - 2025-10-04
+
+### 🚀 Revolutionary Interface Changes
+- **BREAKING**: Combined node and label into single clickable component
+- **NEW**: Embedded status icons using CSS pseudo-elements
+- **NEW**: Always visible labels (removed zoom restrictions)
+- **IMPROVED**: Single-click interaction model (no separate markers)
+
+### 🔧 Technical Improvements
+- **FIXED**: Popup functionality with consistent coordinate handling
+- **FIXED**: Icon size issues that prevented rendering
+- **OPTIMIZED**: Rendering performance and reliability
+- **CLEANED**: Removed debug logging for production
+
+### 🎨 Design Enhancements
+- **NEW**: Status-integrated icons in node labels
+- **IMPROVED**: Better padding and spacing for embedded icons
+- **ENHANCED**: Mobile responsive design optimization
+- **REFINED**: Hover effects and transitions
+
+## [3.4.3] - 2025-10-04
+### 🔍 Emergency Debug Version
+- **DEBUG**: Extensive logging for troubleshooting node visibility
+- **TEMP**: Always show labels regardless of zoom for debugging
+
+## [3.4.2] - 2025-10-04
+### 🔍 Debug Improvements
+- **DEBUG**: Added comprehensive logging for node rendering
+- **FIXED**: Icon size from null to fixed dimensions
+- **LOWERED**: Zoom threshold from 8 to 6 for better visibility
+
+## [3.4.1] - 2025-10-04
+### 🔧 Bug Fixes
+- **FIXED**: Popup functionality and coordinate consistency
+- **IMPROVED**: Coordinate handling using geometry coordinates
+
+## [3.4.0] - 2025-10-04
+### 🚀 Revolutionary Combined Interface
+- **BREAKING**: Eliminated separate node markers
+- **NEW**: Combined node+label unified interface
+- **NEW**: Status icons integrated in labels
+
+## [3.3.6] - 2025-10-03
+### 🔧 CSS Transform Positioning
+- **FIXED**: Navnelapp positioning using CSS transforms
+- **NEW**: Stacked label positioning system
+
+## [3.3.5] - 2025-10-03
+### 👁️ Visibility Improvements
+- **FIXED**: Navnelapp visibility issues
+- **LOWERED**: Zoom threshold from 10 to 8
+
+## [3.3.4] - 2025-10-03
+### 📍 Positioning Fixes
+- **FIXED**: Navnelapp positioning calculations
+- **IMPROVED**: IconAnchor positioning logic
+
+## [3.3.3] - 2025-10-03
+### 🌟 Orbital Popup System
+- **NEW**: Revolutionary 8-pod circular popup layout
+- **NEW**: Central clickable nodes
+- **NEW**: Floating animations with golden hover effects
+
+## [3.3.2] - 2025-10-03
+### 🔍 Search & Navigation
+- **FIXED**: Client-side search with auto-zoom
+- **IMPROVED**: Navnelapp click handling
+
+## [3.3.1] - 2025-10-03
+### 🐛 Critical Bug Fixes
+- **FIXED**: JavaScript errors (createNodeMarker undefined)
+- **FIXED**: Coordinate validation with null checks
+
+## [3.3.0] - 2025-10-03
+### 📱 Mobile Optimization
+- **NEW**: Responsive popup sizing
+- **IMPROVED**: Mobile touch interactions
+
 ## [3.2.2] - 2025-10-03
 
 ### 🎯 Major Features Added

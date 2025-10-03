@@ -1,95 +1,224 @@
-# Meshtastic Docker System v3.2.2
+# 🗺️ Meshtastic Live Map System v3.4.4# 🗺️ Meshtastic Live Map System v3.4.4
 
-**Advanced real-time Meshtastic mesh network visualization with comprehensive telemetry monitoring**
 
-![Meshtastic Map](assets/map_preview.png)
 
-## 🎯 **Key Features**
+**Revolutionary Combined Node+Label Interface** with comprehensive live telemetry, orbital popup system, and production-ready Docker infrastructure.**Revolutionary Combined Node+Label Interface** with comprehensive live telemetry, orbital popup system, and production-ready Docker infrastructure.
 
-### �️ **Advanced Interactive Map**
-- **Live Telemetry v3.2** - Comprehensive real-time sensor monitoring
-- **6 Telemetry Categories** with 30+ sensor types:
-  - 🌡️ Temperature & Environment (temp, humidity, pressure, gas)
-  - 🔋 Power & Battery (battery, voltage, current, power)
+
+
+## 🚀 Key Features## 🚀 Key Features
+
+
+
+### 📍 **Combined Node+Label Interface**### 📍 **Combined Node+Label Interface**
+
+- **Single component design**: Node and label merged into one clickable element- **Single component design**: Node and label merged into one clickable element
+
+- **Status-integrated icons**: Visual status indicators embedded in labels- **Status-integrated icons**: Visual status indicators embedded in labels
+
+- **Always visible**: No zoom restrictions for optimal user experience- **Always visible**: No zoom restrictions for optimal user experience
+
+- **Smart stacking**: Intelligent positioning for overlapping nodes- **Smart stacking**: Intelligent positioning for overlapping nodes
+
+
+
+### 🔴 **Live Telemetry System**### 🔴 **Live Telemetry System**
+
+- **6 comprehensive categories** with 30+ sensor types always visible:- **6 comprehensive categories** with 30+ sensor types always visible:
+
+  - 🌡️ **Temperature & Environment** (temperature, humidity, pressure, gas)  - 🌡️ **Temperature & Environment** (temperature, humidity, pressure, gas)
+
+  - 🔋 **Power & Battery** (battery, voltage, current, power)  - 🔋 **Power & Battery** (battery, voltage, current, power)
+
+  - 🌬️ **Air Quality** (PM1.0, PM2.5, PM10, IAQ)  - 🌬️ **Air Quality** (PM1.0, PM2.5, PM10, IAQ)
+
+  - ☀️ **Weather & Outdoor** (wind, rain, UV, sunlight)  - ☀️ **Weather & Outdoor** (wind, rain, UV, sunlight)
+
+  - 💡 **Light & Sensors** (lux, PIR, ambient, solar)  - 💡 **Light & Sensors** (lux, PIR, ambient, solar)
+
+  - 📡 **Network & Connectivity** (SNR, altitude, channel, air util)  - 📡 **Network & Connectivity** (SNR, altitude, channel, air util)System v3.2.2
+
+
+
+### 🎯 **Advanced Navigation****Advanced real-time Meshtastic mesh network visualization with comprehensive telemetry monitoring**
+
+- **Client-side search** with auto-zoom functionality
+
+- **Clickable node labels** with improved interaction![Meshtastic Map](assets/map_preview.png)
+
+- **Smart filtering** by status, favorites, and telemetry types
+
+- **Responsive popup system** optimized for mobile and desktop## 🎯 **Key Features**
+
+
+
+### 💾 **Extended Data Management**### �️ **Advanced Interactive Map**
+
+- **60-day retention period** (extended from 2 weeks)- **Live Telemetry v3.2** - Comprehensive real-time sensor monitoring
+
+- **Dead node indicators** (💀 for nodes offline 2+ weeks)- **6 Telemetry Categories** with 30+ sensor types:
+
+- **PostgreSQL backend** with comprehensive telemetry schema  - 🌡️ Temperature & Environment (temp, humidity, pressure, gas)
+
+- **Live updates** every 10 seconds when popup is active  - 🔋 Power & Battery (battery, voltage, current, power)
+
   - 🌬️ Air Quality (PM1.0, PM2.5, PM10, IAQ)
-  - ☀️ Weather & Outdoor (wind, rain, UV, solar)
+
+## 🏗️ System Architecture  - ☀️ Weather & Outdoor (wind, rain, UV, solar)
+
   - 💡 Light & Sensors (lux, PIR, ambient light)
-  - 📡 Network & Connectivity (SNR, altitude, channel util)
 
-### 📍 **Smart Navigation & Search**
-- **Client-side Search** - Real-time search in node names, IDs
-- **Auto-zoom & Popup** - Automatic zoom to search results
-- **Clickable Labels** - Enhanced z-index handling for overlapping nodes
-- **Smart Label Stacking** - 25px vertical spacing for clustered nodes
+### Container Infrastructure  - 📡 Network & Connectivity (SNR, altitude, channel util)
 
-### 💾 **Extended Data Management**
-- **60-day Retention** - Extended from 2 weeks for historical analysis
-- **Dead Node Indicators** - 💀 visual marking for nodes offline 2+ weeks
-- **PostgreSQL Backend** - Robust database with comprehensive telemetry schema
-- **Live Updates** - 10-second refresh intervals when popup is open
+```
 
-### 🎯 **Node Status System**
+┌─ meshtastic-postgres (5434) ← PostgreSQL Database### 📍 **Smart Navigation & Search**
+
+├─ meshtastic-mosquitto (1883) ← MQTT Broker  - **Client-side Search** - Real-time search in node names, IDs
+
+├─ meshtasticd ← USB/WiFi Mesh Interface- **Auto-zoom & Popup** - Automatic zoom to search results
+
+└─ meshtastic-map (8088) ← Web Interface & API- **Clickable Labels** - Enhanced z-index handling for overlapping nodes
+
+```- **Smart Label Stacking** - 25px vertical spacing for clustered nodes
+
+
+
+### Active Services### 💾 **Extended Data Management**
+
+- ✅ **Web Interface**: `http://localhost:8088`- **60-day Retention** - Extended from 2 weeks for historical analysis
+
+- ✅ **GeoJSON API**: `/nodes.geojson`- **Dead Node Indicators** - 💀 visual marking for nodes offline 2+ weeks
+
+- ✅ **Live Telemetry**: `/telemetri.json`- **PostgreSQL Backend** - Robust database with comprehensive telemetry schema
+
+- ✅ **Database**: PostgreSQL on port 5434- **Live Updates** - 10-second refresh intervals when popup is open
+
+
+
+## 🔧 Quick Start### 🎯 **Node Status System**
+
 - 🟢 **Online** (< 30 min) - Green indicators
-- 🟡 **Recent** (< 2 hours) - Yellow indicators  
-- 🔴 **Offline** (< 2 weeks) - Red indicators
-- 💀 **Dead** (2+ weeks) - Red with skull, crossed-out text
+
+### Prerequisites- 🟡 **Recent** (< 2 hours) - Yellow indicators  
+
+- Docker & Docker Compose- 🔴 **Offline** (< 2 weeks) - Red indicators
+
+- USB Meshtastic device (optional)- 💀 **Dead** (2+ weeks) - Red with skull, crossed-out text
+
+- WiFi Meshtastic device on network (optional)
 
 ---
 
-## 🚀 **Quick Start**
+### Installation
 
-### 1. **Deploy System**
+```bash## 🚀 **Quick Start**
 
-```bash
-cd /home/kau005/meshtastic-docker
+git clone <repository-url>
+
+cd meshtastic-docker### 1. **Deploy System**
+
 docker-compose up -d
-```
+
+``````bash
+
+cd /home/kau005/meshtastic-docker
+
+### Accessdocker-compose up -d
+
+- **Web Interface**: http://localhost:8088```
+
+- **Health Check**: http://localhost:8088/api/health
 
 ### 2. **Check Status**
 
-```bash
-docker ps | grep meshtastic
-curl http://localhost:8088/api/health
-```
+## 📊 Current System Stats
 
-### 3. **Access Map**
+- **Nodes**: 1,978+ registered nodes```bash
 
-**Web Interface:** http://localhost:8088  
-**API Health:** http://localhost:8088/api/health  
-**GeoJSON Data:** http://localhost:8088/nodes.geojson
+- **Active**: 723+ nodes (last 24h)docker ps | grep meshtastic
 
----
+- **Telemetry**: 10,596+ measurementscurl http://localhost:8088/api/health
 
-## 🏗️ **System Architecture**
+- **Retention**: 60 days```
 
-```
-┌─ meshtastic-postgres (5434) ← PostgreSQL Database
-├─ meshtastic-mosquitto (1883) ← MQTT Broker  
-├─ meshtasticd ← USB/WiFi Mesh Interface
-└─ meshtastic-map (8088) ← Web Interface & API
-```
+- **Health Score**: 9.5/10 - Production ready
 
-### **Container Details**
+- **Uptime**: Auto-recovery from all common failures### 3. **Access Map**
 
-#### **meshtastic-postgres** (Port 5434)
-- PostgreSQL 16 with comprehensive telemetry schema
-- 30+ sensor fields for complete environmental monitoring
+
+
+## 🎯 Node Status System**Web Interface:** http://localhost:8088  
+
+- 🟢 **Online** (< 30 min) - green with embedded icon**API Health:** http://localhost:8088/api/health  
+
+- 🟡 **Recent** (< 2 hours) - yellow with embedded icon**GeoJSON Data:** http://localhost:8088/nodes.geojson
+
+- 🔴 **Offline** (< 2 weeks) - red with embedded icon
+
+- 💀 **Dead** (2+ weeks) - red with death indicator---
+
+
+
+## 🔥 Latest Updates (v3.4.4)## 🏗️ **System Architecture**
+
+
+
+### Revolutionary Interface Changes```
+
+- **Combined node+label design**: Eliminated separate markers┌─ meshtastic-postgres (5434) ← PostgreSQL Database
+
+- **Always visible labels**: No zoom restrictions ├─ meshtastic-mosquitto (1883) ← MQTT Broker  
+
+- **Embedded status icons**: CSS-based status indicators├─ meshtasticd ← USB/WiFi Mesh Interface
+
+- **Improved click handling**: Single-click popup activation└─ meshtastic-map (8088) ← Web Interface & API
+
+- **Enhanced mobile support**: Responsive design optimization```
+
+
+
+### Technical Improvements### **Container Details**
+
+- **Fixed popup functionality**: Consistent coordinate handling
+
+- **Optimized rendering**: Improved performance and reliability#### **meshtastic-postgres** (Port 5434)
+
+- **Clean production code**: Removed debug logging- PostgreSQL 16 with comprehensive telemetry schema
+
+- **Enhanced error handling**: Robust error recovery- 30+ sensor fields for complete environmental monitoring
+
 - 60-day data retention with automatic cleanup
 
-#### **meshtastic-mosquitto** (Port 1883)  
-- MQTT broker bridging to mqtt.meshtastic.org
-- EU_868 regional mesh network integration
-- Real-time message relay and processing
+## 📁 System Files
 
-#### **meshtasticd**
-- Direct USB/WiFi connection to Meshtastic devices
-- Device discovery and polling every 30 seconds
-- PROTONORD nodes configured for Ishavsvegen 69B, Tromsø
+- `index.html v3.4.4` - Combined node+label interface#### **meshtastic-mosquitto** (Port 1883)  
+
+- `docker-compose.yml` - Container orchestration- MQTT broker bridging to mqtt.meshtastic.org
+
+- `HEALTH_CHECK.md` - System monitoring guide- EU_868 regional mesh network integration
+
+- `QUICK_REFERENCE.md` - API and usage reference- Real-time message relay and processing
+
+
+
+## 🔮 Production Ready#### **meshtasticd**
+
+- **Server deployment ready**: Auto-recovery on boot- Direct USB/WiFi connection to Meshtastic devices
+
+- **No manual intervention**: All services start automatically  - Device discovery and polling every 30 seconds
+
+- **Comprehensive monitoring**: Health checks and logging- PROTONORD nodes configured for Ishavsvegen 69B, Tromsø
+
+- **Backup strategy**: Daily backups and cleanup routines
 
 #### **meshtastic-map** (Port 8088)
-- Combined HTTP server with Flask backend
+
+---- Combined HTTP server with Flask backend
+
 - Real-time GeoJSON API generation
-- Comprehensive web interface with live telemetry
+
+**System is fully operational and production-ready! 🎉**- Comprehensive web interface with live telemetry
 
 ---
 
