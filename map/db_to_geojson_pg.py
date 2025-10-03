@@ -80,8 +80,10 @@ def format_timestamp(dt: datetime | None) -> Dict[str, Any]:
         status = "online"
     elif ago < 7200:  # < 2 hours
         status = "recent"
-    else:
+    elif ago < 1209600:  # < 2 weeks (14 days * 24 hours * 60 minutes * 60 seconds)
         status = "offline"
+    else:
+        status = "dead"  # 2+ weeks old - show as dead/abandoned
     
     return {
         "lastHeard": dt.strftime("%Y-%m-%d %H:%M:%S %Z"),
@@ -141,18 +143,32 @@ def generate_geojson(conn) -> None:
     
     cursor = conn.cursor(cursor_factory=RealDictCursor)
     
-    # Fetch active nodes with coordinates and latest telemetry
+    # Fetch active nodes with coordinates (GPS or manual) and latest telemetry
     cursor.execute("""
         SELECT 
             n.node_id, n.node_num, n.long_name, n.short_name, n.hw_model, n.role,
-            n.latitude, n.longitude, n.altitude, n.battery_level, n.voltage, n.snr,
-            n.last_heard, n.source,
+            n.effective_latitude as latitude, 
+            n.effective_longitude as longitude, 
+            n.effective_altitude as altitude,
+            n.effective_position_source as position_source,
+            n.battery_level, n.voltage, n.snr,
+            n.last_heard, n.source, n.notes, n.manual_address,
             n.has_power_sensor, n.has_environment_sensor, n.has_air_quality_sensor,
+            n.tags,
             t.channel_utilization, t.air_util_tx,
             p.timestamp as position_time
-        FROM nodes n
+        FROM nodes_with_tags n
         LEFT JOIN LATERAL (
-            SELECT channel_utilization, air_util_tx
+            SELECT channel_utilization, air_util_tx, 
+                   temperature, relative_humidity, barometric_pressure,
+                   ch1_voltage, ch1_current, ch2_voltage, ch2_current, ch3_voltage, ch3_current,
+                   pm10_standard, pm25_standard, pm100_standard,
+                   wind_speed, wind_direction, wind_gust,
+                   soil_temperature, soil_moisture,
+                   gas_resistance, iaq, co2, voc_idx, nox_idx,
+                   lux, white_lux, ir_lux, uv_lux,
+                   distance, weight, radiation, uptime_seconds,
+                   rainfall_1h, rainfall_24h
             FROM telemetry
             WHERE node_id = n.node_id
             ORDER BY timestamp DESC
@@ -165,13 +181,17 @@ def generate_geojson(conn) -> None:
             ORDER BY timestamp DESC
             LIMIT 1
         ) p ON TRUE
-        WHERE n.latitude IS NOT NULL 
-          AND n.longitude IS NOT NULL
-          AND n.is_active = TRUE
+        WHERE n.effective_latitude IS NOT NULL 
+          AND n.effective_longitude IS NOT NULL
+          AND n.last_heard > NOW() - INTERVAL '60 days'  -- Show nodes active within 2 months
         ORDER BY n.last_heard DESC
     """)
     
     nodes = cursor.fetchall()
+    
+    # Debug: Check if telemetry data is being fetched
+    for node in nodes[:3]:  # Check first 3 nodes
+        print(f"DEBUG: Node {node.get('node_id')} telemetry: temp={node.get('temperature')}, humidity={node.get('relative_humidity')}, pressure={node.get('barometric_pressure')}")
     
     # Fetch recent messages for each node (last 5 messages per node)
     cursor = conn.cursor(cursor_factory=RealDictCursor)
@@ -204,6 +224,11 @@ def generate_geojson(conn) -> None:
         # Format timestamp and get status
         time_data = format_timestamp(node['last_heard'])
         
+        # Parse tags from JSON
+        tags = node.get('tags', [])
+        if isinstance(tags, str):
+            tags = json.loads(tags) if tags else []
+        
         props = {
             "nodeId": node_id,
             "nodeNum": node['node_num'],
@@ -216,15 +241,56 @@ def generate_geojson(conn) -> None:
             "voltage": node['voltage'],
             "snr": node['snr'],
             "source": node['source'],
+            "positionSource": node.get('position_source', 'gps'),
+            "manualAddress": node.get('manual_address'),
             "channelUtil": node.get('channel_utilization'),
             "airUtilTx": node.get('air_util_tx'),
+            # Environment sensors
+            "temperature": node.get('temperature'),
+            "relativeHumidity": node.get('relative_humidity'),
+            "barometricPressure": node.get('barometric_pressure'),
+            "gasResistance": node.get('gas_resistance'),
+            "iaq": node.get('iaq'),
+            # Power sensors
+            "ch1Voltage": node.get('ch1_voltage'),
+            "ch1Current": node.get('ch1_current'),
+            "ch2Voltage": node.get('ch2_voltage'),
+            "ch2Current": node.get('ch2_current'),
+            "ch3Voltage": node.get('ch3_voltage'),
+            "ch3Current": node.get('ch3_current'),
+            # Air quality sensors
+            "pm10Standard": node.get('pm10_standard'),
+            "pm25Standard": node.get('pm25_standard'),
+            "pm100Standard": node.get('pm100_standard'),
+            "co2": node.get('co2'),
+            "vocIdx": node.get('voc_idx'),
+            "noxIdx": node.get('nox_idx'),
+            # Weather sensors
+            "windSpeed": node.get('wind_speed'),
+            "windDirection": node.get('wind_direction'),
+            "windGust": node.get('wind_gust'),
+            "soilTemperature": node.get('soil_temperature'),
+            "soilMoisture": node.get('soil_moisture'),
+            "rainfall1h": node.get('rainfall_1h'),
+            "rainfall24h": node.get('rainfall_24h'),
+            # Light sensors
+            "lux": node.get('lux'),
+            "whiteLux": node.get('white_lux'),
+            "irLux": node.get('ir_lux'),
+            "uvLux": node.get('uv_lux'),
+            # Other sensors
+            "distance": node.get('distance'),
+            "weight": node.get('weight'),
+            "radiation": node.get('radiation'),
+            "uptimeSeconds": node.get('uptime_seconds'),
             "hasPowerSensor": node.get('has_power_sensor', False),
             "hasEnvironmentSensor": node.get('has_environment_sensor', False),
             "hasAirQualitySensor": node.get('has_air_quality_sensor', False),
             "positionTime": node.get('position_time').isoformat() if node.get('position_time') else None,
             "isFavorite": node_id in favs,
             "customLabel": labels.get(node_id),
-            "notes": notes.get(node_id),
+            "notes": node.get('notes') or notes.get(node_id),
+            "tags": tags,
             "recentMessages": messages_by_node.get(node_id, [])[:5],  # Last 5 messages
             **time_data
         }

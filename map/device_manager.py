@@ -91,9 +91,8 @@ class MeshtasticDeviceManager:
         self.devices: Dict[str, DeviceInfo] = {}
         self.devices_lock = threading.Lock()
         
-        # State file for persistence
-        self.state_file = '/data/config/device_registry.json'
-        self.load_state()
+        # Config file for manual device registry
+        self.config_file = '/data/config/device_registry.json'
         
         logging.info(f"Device Manager initialized:")
         logging.info(f"  Discovery interval: {self.discovery_interval}s")
@@ -103,33 +102,26 @@ class MeshtasticDeviceManager:
         if self.manual_networks:
             logging.info(f"  Manual networks: {self.manual_networks}")
         
-    def load_state(self):
-        """Load previously discovered devices from state file"""
+    def load_manual_devices(self):
+        """Load manually configured devices from config file (read fresh every time)"""
+        manual_devices = {}
         try:
-            if os.path.exists(self.state_file):
-                with open(self.state_file, 'r') as f:
+            if os.path.exists(self.config_file):
+                with open(self.config_file, 'r') as f:
                     data = json.load(f)
                     for addr, info in data.items():
-                        self.devices[addr] = DeviceInfo(
-                            device_type=info['type'],
-                            address=addr,
-                            name=info.get('name')
-                        )
-                        self.devices[addr].fail_count = info.get('fail_count', 0)
-                        self.devices[addr].node_count = info.get('node_count', 0)
-                logging.info(f"Loaded {len(self.devices)} devices from state file")
+                        # Only add if not already discovered
+                        if addr not in self.devices:
+                            device = DeviceInfo(
+                                device_type=info['type'],
+                                address=addr,
+                                name=info.get('name', addr)
+                            )
+                            manual_devices[addr] = device
+                            logging.info(f"📋 Loaded manual device: {device.name} ({addr})")
         except Exception as e:
-            logging.warning(f"Failed to load state file: {e}")
-            
-    def save_state(self):
-        """Save discovered devices to state file"""
-        try:
-            os.makedirs(os.path.dirname(self.state_file), exist_ok=True)
-            with open(self.state_file, 'w') as f:
-                state = {addr: dev.to_dict() for addr, dev in self.devices.items()}
-                json.dump(state, f, indent=2)
-        except Exception as e:
-            logging.warning(f"Failed to save state file: {e}")
+            logging.warning(f"Failed to load config file: {e}")
+        return manual_devices
             
     def discover_usb_devices(self) -> Set[str]:
         """Discover USB serial devices"""
@@ -142,7 +134,6 @@ class MeshtasticDeviceManager:
                     if port not in self.devices:
                         logging.info(f"🔌 New USB device discovered: {port}")
                         self.devices[port] = DeviceInfo('serial', port, f"USB-{port.split('/')[-1]}")
-                        self.save_state()
         except Exception as e:
             logging.error(f"USB discovery failed: {e}")
         return discovered
@@ -233,7 +224,6 @@ class MeshtasticDeviceManager:
                                     if address not in self.devices:
                                         logging.info(f"📡 New WiFi device discovered: {address}")
                                         self.devices[address] = DeviceInfo('tcp', address, f"WiFi-{ip}")
-                                        self.save_state()
             except subprocess.TimeoutExpired:
                 logging.warning(f"Network scan timeout for {network}")
             except FileNotFoundError:
@@ -264,7 +254,6 @@ class MeshtasticDeviceManager:
                         if address not in self.devices:
                             logging.info(f"📡 New WiFi device discovered: {address}")
                             self.devices[address] = DeviceInfo('tcp', address, f"WiFi-{ip_str}")
-                            self.save_state()
                             
         except Exception as e:
             logging.error(f"Fallback scan failed for {network_cidr}: {e}")
@@ -289,12 +278,21 @@ class MeshtasticDeviceManager:
                 logging.debug(f"Connecting to serial device: {device.address}")
                 interface = meshtastic.serial_interface.SerialInterface(device.address)
             else:  # tcp
-                ip, port = device.address.split(':')
-                logging.debug(f"Connecting to TCP device: {ip}:{port}")
+                # Parse address - can be "ip" or "ip:port"
+                if ':' in device.address:
+                    ip, port = device.address.split(':')
+                else:
+                    ip = device.address
+                    port = None
+                logging.debug(f"Connecting to TCP device: {ip}")
                 interface = meshtastic.tcp_interface.TCPInterface(hostname=ip)
                 
             # Wait a bit for interface to initialize
             time.sleep(2)
+            
+            # Get the device's own node ID for prioritization
+            my_node_info = interface.getMyNodeInfo()
+            my_node_id = f"!{my_node_info.get('num', 0):08x}" if my_node_info else None
             
             nodes_data = []
             if interface.nodes:
@@ -303,6 +301,13 @@ class MeshtasticDeviceManager:
                         # Get lastHeard timestamp from node database
                         last_heard = node.get('lastHeard')
                         
+                        # Check if this node has fixed position
+                        position = node.get('position', {})
+                        has_fixed_position = position.get('fixedPosition', False)
+                        
+                        # Determine if this is a self-report (device reporting its own position)
+                        is_self_report = (node_id == my_node_id)
+                        
                         node_data = {
                             'node_id': node_id,
                             'node_num': node.get('num'),
@@ -310,15 +315,17 @@ class MeshtasticDeviceManager:
                             'short_name': node.get('user', {}).get('shortName'),
                             'hw_model': node.get('user', {}).get('hwModel'),
                             'role': node.get('user', {}).get('role'),
-                            'latitude': node.get('position', {}).get('latitude'),
-                            'longitude': node.get('position', {}).get('longitude'),
-                            'altitude': node.get('position', {}).get('altitude'),
+                            'latitude': position.get('latitude'),
+                            'longitude': position.get('longitude'),
+                            'altitude': position.get('altitude'),
                             'battery_level': node.get('deviceMetrics', {}).get('batteryLevel'),
                             'voltage': node.get('deviceMetrics', {}).get('voltage'),
                             'snr': node.get('snr'),
                             'hops_away': node.get('hopsAway'),
-                            'last_heard': last_heard,  # Use actual lastHeard from node
-                            'source': device.name
+                            'last_heard': last_heard,
+                            'source': device.name,
+                            'has_fixed_position': has_fixed_position,
+                            'is_self_report': is_self_report
                         }
                         nodes_data.append(node_data)
                     except Exception as e:
@@ -342,7 +349,7 @@ class MeshtasticDeviceManager:
         return None
         
     def save_node_data(self, nodes_data: List[dict]):
-        """Save node data to PostgreSQL database"""
+        """Save node data to PostgreSQL database with smart position update logic"""
         if not nodes_data:
             return
             
@@ -350,9 +357,55 @@ class MeshtasticDeviceManager:
             conn = psycopg2.connect(**self.db_config)
             cur = conn.cursor()
             
-            # Prepare data for bulk upsert
-            values = []
             for node in nodes_data:
+                node_id = node['node_id']
+                is_self_report = node.get('is_self_report', False)
+                has_fixed_position = node.get('has_fixed_position', False)
+                new_lat = node.get('latitude')
+                new_lon = node.get('longitude')
+                
+                # Get current position from database
+                cur.execute("""
+                    SELECT latitude, longitude, source 
+                    FROM nodes 
+                    WHERE node_id = %s
+                """, (node_id,))
+                existing = cur.fetchone()
+                
+                # Determine if we should update position
+                should_update_position = True
+                skip_reason = None
+                
+                if existing:
+                    old_lat, old_lon, old_source = existing
+                    
+                    # Rule 1: Skip if node has fixed position and this is NOT a self-report
+                    if has_fixed_position and not is_self_report:
+                        should_update_position = False
+                        skip_reason = f"fixed position node, ignoring 3rd-party update from {node['source']}"
+                    
+                    # Rule 2: Skip if position hasn't changed (within 0.0001 degrees ~11 meters)
+                    elif old_lat and old_lon and new_lat and new_lon:
+                        lat_diff = abs(float(old_lat) - float(new_lat))
+                        lon_diff = abs(float(old_lon) - float(new_lon))
+                        if lat_diff < 0.0001 and lon_diff < 0.0001:
+                            should_update_position = False
+                            skip_reason = "position unchanged"
+                    
+                    # Rule 3: Prioritize self-reports over 3rd-party reports
+                    # If existing source is self-report, only update from another self-report
+                    elif old_source and is_self_report == False:
+                        # Check if old source was a self-report (contains the node_id in source name)
+                        # This is a heuristic - self-reports typically come from the node's own gateway
+                        pass  # For now, allow update
+                
+                if not should_update_position:
+                    logging.debug(f"⏭️  Skipping position update for {node_id}: {skip_reason}")
+                    # Still update other fields, just not position
+                    new_lat = None
+                    new_lon = None
+                    node['altitude'] = None
+                
                 # Convert lastHeard Unix timestamp to datetime if present
                 last_heard_dt = None
                 if node.get('last_heard'):
@@ -362,53 +415,48 @@ class MeshtasticDeviceManager:
                     except:
                         pass
                 
-                values.append((
-                    node['node_id'],
+                # Upsert with smart position handling
+                cur.execute("""
+                    INSERT INTO nodes (
+                        node_id, node_num, long_name, short_name, hw_model, role,
+                        latitude, longitude, altitude, battery_level, voltage,
+                        snr, hops_away, source, last_heard, last_updated
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW()
+                    )
+                    ON CONFLICT (node_id) DO UPDATE SET
+                        node_num = COALESCE(EXCLUDED.node_num, nodes.node_num),
+                        long_name = COALESCE(EXCLUDED.long_name, nodes.long_name),
+                        short_name = COALESCE(EXCLUDED.short_name, nodes.short_name),
+                        hw_model = COALESCE(EXCLUDED.hw_model, nodes.hw_model),
+                        role = COALESCE(EXCLUDED.role, nodes.role),
+                        latitude = COALESCE(EXCLUDED.latitude, nodes.latitude),
+                        longitude = COALESCE(EXCLUDED.longitude, nodes.longitude),
+                        altitude = COALESCE(EXCLUDED.altitude, nodes.altitude),
+                        battery_level = COALESCE(EXCLUDED.battery_level, nodes.battery_level),
+                        voltage = COALESCE(EXCLUDED.voltage, nodes.voltage),
+                        snr = COALESCE(EXCLUDED.snr, nodes.snr),
+                        hops_away = COALESCE(EXCLUDED.hops_away, nodes.hops_away),
+                        source = COALESCE(EXCLUDED.source, nodes.source),
+                        last_heard = COALESCE(EXCLUDED.last_heard, nodes.last_heard),
+                        last_updated = NOW()
+                """, (
+                    node_id,
                     node['node_num'],
                     node['long_name'],
                     node['short_name'],
                     node['hw_model'],
                     node['role'],
-                    node['latitude'],
-                    node['longitude'],
-                    node['altitude'],
+                    new_lat,  # Will be None if position shouldn't update
+                    new_lon,
+                    node['altitude'] if should_update_position else None,
                     node['battery_level'],
                     node['voltage'],
                     node['snr'],
                     node['hops_away'],
                     node['source'],
-                    last_heard_dt  # Use actual timestamp from node
+                    last_heard_dt
                 ))
-            
-            # Bulk upsert
-            execute_values(
-                cur,
-                """
-                INSERT INTO nodes (
-                    node_id, node_num, long_name, short_name, hw_model, role,
-                    latitude, longitude, altitude, battery_level, voltage,
-                    snr, hops_away, source, last_heard, last_updated
-                ) VALUES %s
-                ON CONFLICT (node_id) DO UPDATE SET
-                    node_num = EXCLUDED.node_num,
-                    long_name = COALESCE(EXCLUDED.long_name, nodes.long_name),
-                    short_name = COALESCE(EXCLUDED.short_name, nodes.short_name),
-                    hw_model = COALESCE(EXCLUDED.hw_model, nodes.hw_model),
-                    role = COALESCE(EXCLUDED.role, nodes.role),
-                    latitude = COALESCE(EXCLUDED.latitude, nodes.latitude),
-                    longitude = COALESCE(EXCLUDED.longitude, nodes.longitude),
-                    altitude = COALESCE(EXCLUDED.altitude, nodes.altitude),
-                    battery_level = COALESCE(EXCLUDED.battery_level, nodes.battery_level),
-                    voltage = COALESCE(EXCLUDED.voltage, nodes.voltage),
-                    snr = COALESCE(EXCLUDED.snr, nodes.snr),
-                    hops_away = COALESCE(EXCLUDED.hops_away, nodes.hops_away),
-                    source = EXCLUDED.source,
-                    last_heard = COALESCE(EXCLUDED.last_heard, nodes.last_heard),
-                    last_updated = NOW()
-                """,
-                values,
-                template="(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())"
-            )
             
             conn.commit()
             cur.close()
@@ -432,9 +480,6 @@ class MeshtasticDeviceManager:
                 logging.warning(f"🗑️  Removing dead device: {device.name} (failed {device.fail_count} times)")
                 del self.devices[addr]
                 
-            if to_remove:
-                self.save_state()
-                
     def discovery_loop(self):
         """Continuous device discovery thread"""
         while True:
@@ -454,25 +499,45 @@ class MeshtasticDeviceManager:
             time.sleep(self.discovery_interval)
             
     def polling_loop(self):
-        """Continuous device polling thread"""
+        """Continuous device polling thread with staggered intervals"""
+        poll_cycle = 0  # Counter for staggered polling
+        
         while True:
             try:
+                # Load manual devices from config file
+                manual_devices = self.load_manual_devices()
                 with self.devices_lock:
+                    # Merge manual devices with discovered devices
+                    self.devices.update(manual_devices)
                     devices_to_poll = list(self.devices.values())
                     
                 if not devices_to_poll:
                     logging.info("No devices to poll, waiting...")
                     time.sleep(self.poll_interval)
                     continue
-                    
-                logging.info(f"🔄 Polling {len(devices_to_poll)} devices...")
                 
+                # Stagger polling: USB on even cycles, WiFi on odd cycles
+                # This prevents both nodes from updating at the same time
+                filtered_devices = []
                 for device in devices_to_poll:
-                    self.poll_device(device)
-                    time.sleep(1)  # Small delay between devices
+                    if poll_cycle % 2 == 0:
+                        # Even cycle: poll USB devices
+                        if 'USB' in device.name or device.type == 'serial':
+                            filtered_devices.append(device)
+                    else:
+                        # Odd cycle: poll WiFi/TCP devices  
+                        if 'WiFi' in device.name or device.type == 'tcp':
+                            filtered_devices.append(device)
+                
+                if filtered_devices:
+                    logging.info(f"🔄 Polling {len(filtered_devices)} devices (cycle {poll_cycle % 2})...")
+                    
+                    for device in filtered_devices:
+                        self.poll_device(device)
+                        time.sleep(1)  # Small delay between devices
                     
                 self.cleanup_dead_devices()
-                self.save_state()
+                poll_cycle += 1
                 
             except Exception as e:
                 logging.error(f"Polling loop error: {e}")

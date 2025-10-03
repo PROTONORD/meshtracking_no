@@ -275,6 +275,241 @@ def get_nodes():
         return jsonify({'error': 'Internal server error'}), 500
 
 
+@app.route('/api/node/<node_id>/tags', methods=['GET', 'POST', 'DELETE'])
+def manage_tags(node_id):
+    """Manage tags for a node"""
+    if request.method == 'GET':
+        # Get all tags for node
+        try:
+            conn = get_db_connection()
+            if not conn:
+                return jsonify({'error': 'Database connection failed'}), 500
+            
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT tag, tag_type, color, created_at 
+                FROM node_tags 
+                WHERE node_id = %s
+                ORDER BY tag_type, tag
+            """, (node_id,))
+            
+            tags = []
+            for row in cursor.fetchall():
+                tags.append({
+                    'tag': row[0],
+                    'type': row[1],
+                    'color': row[2],
+                    'created_at': row[3].isoformat() if row[3] else None
+                })
+            
+            cursor.close()
+            conn.close()
+            
+            return jsonify({'tags': tags}), 200
+            
+        except Exception as e:
+            logger.error(f"Error fetching tags: {e}")
+            return jsonify({'error': 'Internal server error'}), 500
+    
+    elif request.method == 'POST':
+        # Add tag to node
+        if not verify_api_key():
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        data = request.json
+        tag = data.get('tag')
+        tag_type = data.get('type', 'custom')
+        color = data.get('color', '#3B82F6')
+        
+        if not tag:
+            return jsonify({'error': 'Tag is required'}), 400
+        
+        try:
+            conn = get_db_connection()
+            if not conn:
+                return jsonify({'error': 'Database connection failed'}), 500
+            
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO node_tags (node_id, tag, tag_type, color)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (node_id, tag) DO UPDATE
+                SET tag_type = EXCLUDED.tag_type, color = EXCLUDED.color, updated_at = NOW()
+            """, (node_id, tag, tag_type, color))
+            
+            conn.commit()
+            cursor.close()
+            conn.close()
+            
+            logger.info(f"Added tag '{tag}' to node {node_id}")
+            return jsonify({'success': True, 'tag': tag}), 200
+            
+        except Exception as e:
+            logger.error(f"Error adding tag: {e}")
+            return jsonify({'error': 'Internal server error'}), 500
+    
+    elif request.method == 'DELETE':
+        # Remove tag from node
+        if not verify_api_key():
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        tag = request.args.get('tag')
+        if not tag:
+            return jsonify({'error': 'Tag parameter is required'}), 400
+        
+        try:
+            conn = get_db_connection()
+            if not conn:
+                return jsonify({'error': 'Database connection failed'}), 500
+            
+            cursor = conn.cursor()
+            cursor.execute("""
+                DELETE FROM node_tags 
+                WHERE node_id = %s AND tag = %s
+            """, (node_id, tag))
+            
+            conn.commit()
+            cursor.close()
+            conn.close()
+            
+            logger.info(f"Removed tag '{tag}' from node {node_id}")
+            return jsonify({'success': True}), 200
+            
+        except Exception as e:
+            logger.error(f"Error removing tag: {e}")
+            return jsonify({'error': 'Internal server error'}), 500
+
+
+@app.route('/api/node/<node_id>/position', methods=['POST', 'DELETE'])
+def set_manual_position(node_id):
+    """Set or remove manual position for a node"""
+    if not verify_api_key():
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    if request.method == 'POST':
+        data = request.json
+        latitude = data.get('latitude')
+        longitude = data.get('longitude')
+        altitude = data.get('altitude')
+        address = data.get('address')
+        
+        if not latitude or not longitude:
+            return jsonify({'error': 'Latitude and longitude are required'}), 400
+        
+        try:
+            conn = get_db_connection()
+            if not conn:
+                return jsonify({'error': 'Database connection failed'}), 500
+            
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE nodes 
+                SET manual_latitude = %s, 
+                    manual_longitude = %s, 
+                    manual_altitude = %s,
+                    manual_address = %s,
+                    position_source = 'manual'
+                WHERE node_id = %s
+            """, (latitude, longitude, altitude, address, node_id))
+            
+            conn.commit()
+            cursor.close()
+            conn.close()
+            
+            logger.info(f"Set manual position for node {node_id}: {latitude}, {longitude}")
+            return jsonify({'success': True}), 200
+            
+        except Exception as e:
+            logger.error(f"Error setting manual position: {e}")
+            return jsonify({'error': 'Internal server error'}), 500
+    
+    elif request.method == 'DELETE':
+        try:
+            conn = get_db_connection()
+            if not conn:
+                return jsonify({'error': 'Database connection failed'}), 500
+            
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE nodes 
+                SET manual_latitude = NULL, 
+                    manual_longitude = NULL, 
+                    manual_altitude = NULL,
+                    manual_address = NULL,
+                    position_source = 'gps'
+                WHERE node_id = %s
+            """, (node_id,))
+            
+            conn.commit()
+            cursor.close()
+            conn.close()
+            
+            logger.info(f"Removed manual position for node {node_id}")
+            return jsonify({'success': True}), 200
+            
+        except Exception as e:
+            logger.error(f"Error removing manual position: {e}")
+            return jsonify({'error': 'Internal server error'}), 500
+
+
+@app.route('/api/nodes/search', methods=['GET'])
+def search_nodes():
+    """Search all nodes (with or without position) by name, ID, or tags"""
+    query = request.args.get('q', '').lower()
+    
+    if not query:
+        return jsonify({'error': 'Query parameter "q" is required'}), 400
+    
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+        
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT DISTINCT
+                n.node_id, n.long_name, n.short_name, n.hw_model,
+                n.effective_latitude, n.effective_longitude,
+                n.effective_position_source, n.last_heard,
+                n.tags, n.notes
+            FROM nodes_with_tags n
+            LEFT JOIN node_tags nt ON n.node_id = nt.node_id
+            WHERE 
+                LOWER(n.node_id) LIKE %s OR
+                LOWER(n.long_name) LIKE %s OR
+                LOWER(n.short_name) LIKE %s OR
+                LOWER(nt.tag) LIKE %s OR
+                LOWER(n.notes) LIKE %s
+            ORDER BY n.last_heard DESC
+            LIMIT 50
+        """, (f'%{query}%', f'%{query}%', f'%{query}%', f'%{query}%', f'%{query}%'))
+        
+        results = []
+        for row in cursor.fetchall():
+            results.append({
+                'node_id': row[0],
+                'long_name': row[1],
+                'short_name': row[2],
+                'hw_model': row[3],
+                'latitude': row[4],
+                'longitude': row[5],
+                'position_source': row[6],
+                'last_heard': row[7].isoformat() if row[7] else None,
+                'tags': json.loads(row[8]) if row[8] else [],
+                'notes': row[9],
+                'has_position': row[4] is not None and row[5] is not None
+            })
+        
+        cursor.close()
+        conn.close()
+        
+        return jsonify({'results': results, 'count': len(results)}), 200
+        
+    except Exception as e:
+        logger.error(f"Error searching nodes: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+
 if __name__ == '__main__':
     logger.info("=== Meshtastic Node API Started ===")
     logger.info(f"Listening on port {os.getenv('NODE_API_PORT', 8081)}")

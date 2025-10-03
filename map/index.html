@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- VERSION: 3.2.2 - Build 2025-10-03T20:45 - Fixed createNodeMarker function missing error -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Meshtastic Map</title>
+  <title>Meshtastic Map v2.0 - LIVE TELEMETRI VERSJON</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <style>
     * { box-sizing: border-box; }
@@ -228,8 +229,23 @@
     /* Popup styling */
     .leaflet-popup-content {
       margin: 12px;
-      min-width: 250px;
-      max-width: 90vw;
+      min-width: 280px;
+      max-width: 400px;
+      box-sizing: border-box;
+    }
+    
+    .leaflet-popup-content-wrapper {
+      max-height: 80vh;
+      overflow-y: auto;
+      max-width: calc(100vw - 40px);
+    }
+    
+    /* Ensure all popup inputs and buttons fit within container */
+    .leaflet-popup-content input,
+    .leaflet-popup-content select,
+    .leaflet-popup-content button {
+      box-sizing: border-box;
+      max-width: 100%;
     }
     
     .popup h3 {
@@ -306,6 +322,12 @@
     }
     
     /* Node labels */
+    .leaflet-div-icon {
+      background: transparent !important;
+      border: none !important;
+      pointer-events: auto !important;
+    }
+    
     .node-label {
       background: rgba(255, 255, 255, 0.95);
       border: 1px solid #ddd;
@@ -315,7 +337,19 @@
       font-weight: 600;
       white-space: nowrap;
       box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-      pointer-events: none;
+      pointer-events: auto;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      z-index: 1000;
+      position: relative;
+      display: inline-block;
+    }
+    
+    .node-label:hover {
+      transform: scale(1.05);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      z-index: 1001;
+      background: rgba(255, 255, 255, 1);
     }
     
     .node-label.online {
@@ -338,10 +372,1286 @@
       color: #1565c0;
       font-weight: 700;
     }
+    
+    /* Sidebar for node management */
+    .sidebar {
+      position: fixed;
+      top: 0;
+      right: -400px;
+      width: 400px;
+      height: 100%;
+      background: white;
+      box-shadow: -2px 0 10px rgba(0,0,0,0.2);
+      z-index: 2000;
+      transition: right 0.3s ease;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .sidebar.open {
+      right: 0;
+    }
+    
+    .sidebar-header {
+      padding: 15px 20px;
+      border-bottom: 2px solid #e0e0e0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #f5f5f5;
+    }
+    
+    .sidebar-header h3 {
+      margin: 0;
+      font-size: 1.1em;
+      color: #333;
+    }
+    
+    .close-sidebar {
+      background: none;
+      border: none;
+      font-size: 1.5em;
+      cursor: pointer;
+      color: #666;
+      padding: 0;
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+    }
+    
+    .close-sidebar:hover {
+      background: #e0e0e0;
+    }
+    
+    .sidebar-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+    }
+    
+    .sidebar-section {
+      margin-bottom: 25px;
+    }
+    
+    .sidebar-section h4 {
+      margin: 0 0 10px 0;
+      font-size: 0.95em;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .tag-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    
+    .tag-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 16px;
+      font-size: 0.9em;
+      border: 1px solid;
+      cursor: default;
+    }
+    
+    .tag-chip.nickname {
+      background: #e3f2fd;
+      border-color: #2196F3;
+      color: #1565C0;
+    }
+    
+    .tag-chip.category {
+      background: #fff3e0;
+      border-color: #FF9800;
+      color: #E65100;
+    }
+    
+    .tag-chip.custom {
+      background: #f3e5f5;
+      border-color: #9C27B0;
+      color: #6A1B9A;
+    }
+    
+    .tag-chip .remove-tag {
+      cursor: pointer;
+      opacity: 0.6;
+      font-weight: bold;
+    }
+    
+    .tag-chip .remove-tag:hover {
+      opacity: 1;
+    }
+    
+    .tag-input-group {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    
+    .tag-input-group input {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+    
+    .tag-input-group select {
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 0.9em;
+      background: white;
+    }
+    
+    .tag-input-group button {
+      padding: 8px 16px;
+      background: #2196F3;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.9em;
+      font-weight: 600;
+    }
+    
+    .tag-input-group button:hover {
+      background: #1976D2;
+    }
+    
+    .position-info {
+      background: #f5f5f5;
+      padding: 12px;
+      border-radius: 4px;
+      margin-bottom: 10px;
+      font-size: 0.9em;
+    }
+    
+    .position-info .label {
+      font-weight: 600;
+      color: #666;
+      margin-bottom: 4px;
+    }
+    
+    .position-info .coords {
+      font-family: monospace;
+      color: #333;
+    }
+    
+    .position-info .source-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.85em;
+      margin-top: 4px;
+    }
+    
+    .position-info .source-badge.gps {
+      background: #4CAF50;
+      color: white;
+    }
+    
+    .position-info .source-badge.manual {
+      background: #FF9800;
+      color: white;
+    }
+    
+    .position-form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    
+    .position-form input {
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+    
+    .position-form .button-group {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .position-form button {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.9em;
+      font-weight: 600;
+    }
+    
+    .position-form button.primary {
+      background: #2196F3;
+      color: white;
+    }
+    
+    .position-form button.primary:hover {
+      background: #1976D2;
+    }
+    
+    .position-form button.danger {
+      background: #f44336;
+      color: white;
+    }
+    
+    .position-form button.danger:hover {
+      background: #d32f2f;
+    }
+    
+    .position-form button.secondary {
+      background: #e0e0e0;
+      color: #333;
+    }
+    
+    .position-form button.secondary:hover {
+      background: #bdbdbd;
+    }
+    
+    .notes-textarea {
+      width: 100%;
+      min-height: 80px;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 0.9em;
+      resize: vertical;
+    }
+    
+    .sidebar-toggle {
+      position: fixed;
+      top: 80px;
+      right: 10px;
+      z-index: 1500;
+      background: white;
+      border: 2px solid #ddd;
+      border-radius: 4px;
+      padding: 10px 15px;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      font-size: 0.9em;
+      font-weight: 600;
+      color: #333;
+    }
+    
+    .sidebar-toggle:hover {
+      background: #f5f5f5;
+    }
+    
+    /* Search results list */
+    .search-results {
+      max-height: 300px;
+      overflow-y: auto;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      margin-top: 10px;
+      background: white;
+    }
+    
+    .search-result-item {
+      padding: 12px;
+      border-bottom: 1px solid #f0f0f0;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .search-result-item:hover {
+      background: #f5f5f5;
+    }
+    
+    .search-result-item:last-child {
+      border-bottom: none;
+    }
+    
+    .search-result-item .node-info {
+      flex: 1;
+    }
+    
+    .search-result-item .node-name {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 2px;
+    }
+    
+    .search-result-item .node-id {
+      font-size: 0.85em;
+      color: #666;
+      font-family: monospace;
+    }
+    
+    .search-result-item .node-status {
+      font-size: 0.85em;
+      padding: 2px 8px;
+      border-radius: 12px;
+    }
+    
+    .search-result-item .node-status.has-position {
+      background: #4CAF50;
+      color: white;
+    }
+    
+    .search-result-item .node-status.no-position {
+      background: #999;
+      color: white;
+    }
+    
+    /* ==================== ADDRESS AUTOCOMPLETE ==================== */
+    .address-autocomplete {
+      position: relative;
+      display: inline-block;
+      width: 100%;
+    }
+    
+    .address-suggestions {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: white;
+      border: 1px solid #ddd;
+      border-top: none;
+      border-radius: 0 0 4px 4px;
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 1000;
+      display: none;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .address-suggestion {
+      padding: 12px;
+      cursor: pointer;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 0.9em;
+    }
+    
+    .address-suggestion:last-child {
+      border-bottom: none;
+    }
+    
+    .address-suggestion:hover {
+      background: #f5f5f5;
+    }
+    
+    .address-suggestion.selected {
+      background: #e3f2fd;
+    }
+    
+    .address-suggestion .main-text {
+      font-weight: 600;
+      color: #333;
+    }
+    
+    .address-suggestion .secondary-text {
+      font-size: 0.85em;
+      color: #666;
+      margin-top: 2px;
+    }
+    
+    .address-loading {
+      padding: 12px;
+      text-align: center;
+      color: #666;
+      font-size: 0.9em;
+    }
+    
+    /* ==================== MOBILE FULLSCREEN EDIT MODAL ==================== */
+    .mobile-edit-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: white;
+      z-index: 2000;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    
+    .mobile-edit-modal.active {
+      display: block;
+    }
+    
+    .mobile-edit-header {
+      background: #2196F3;
+      color: white;
+      padding: 15px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      position: sticky;
+      top: 0;
+      z-index: 2001;
+    }
+    
+    .mobile-edit-header h3 {
+      margin: 0;
+      font-size: 1.1em;
+      font-weight: 600;
+    }
+    
+    .mobile-edit-close {
+      background: none;
+      border: none;
+      color: white;
+      font-size: 1.5em;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    
+    .mobile-edit-close:hover {
+      background: rgba(255,255,255,0.1);
+    }
+    
+    .mobile-edit-content {
+      padding: 20px;
+    }
+    
+    .mobile-edit-section {
+      margin-bottom: 30px;
+    }
+    
+    .mobile-edit-section h4 {
+      margin: 0 0 15px 0;
+      font-size: 1em;
+      color: #333;
+      font-weight: 600;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 8px;
+    }
+    
+    .mobile-tag-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 15px;
+    }
+    
+    .mobile-tag-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 20px;
+      font-size: 0.9em;
+      border: 1px solid;
+      cursor: default;
+    }
+    
+    .mobile-tag-chip.nickname {
+      background: #e3f2fd;
+      border-color: #2196F3;
+      color: #1565C0;
+    }
+    
+    .mobile-tag-chip.category {
+      background: #fff3e0;
+      border-color: #FF9800;
+      color: #E65100;
+    }
+    
+    .mobile-tag-chip.custom {
+      background: #f3e5f5;
+      border-color: #9C27B0;
+      color: #6A1B9A;
+    }
+    
+    .mobile-tag-chip .remove-tag {
+      cursor: pointer;
+      opacity: 0.7;
+      font-weight: bold;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .mobile-tag-chip .remove-tag:hover {
+      opacity: 1;
+      background: rgba(0,0,0,0.1);
+    }
+    
+    .mobile-tag-input {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    
+    .mobile-tag-input input,
+    .mobile-tag-input select {
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 16px; /* Prevent zoom on iOS */
+      background: white;
+    }
+    
+    .mobile-tag-input button {
+      padding: 15px;
+      background: #2196F3;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    
+    .mobile-tag-input button:active {
+      background: #1976D2;
+    }
+    
+    .mobile-position-info {
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      font-size: 0.9em;
+    }
+    
+    .mobile-position-form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    .mobile-position-form input {
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 16px;
+      background: white;
+    }
+    
+    .mobile-button-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 15px;
+    }
+    
+    .mobile-button-group button {
+      padding: 15px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    
+    .mobile-button-group button.primary {
+      background: #2196F3;
+      color: white;
+    }
+    
+    .mobile-button-group button.secondary {
+      background: #e0e0e0;
+      color: #333;
+    }
+    
+    .mobile-button-group button.danger {
+      background: #f44336;
+      color: white;
+    }
+    
+    .mobile-button-group button:active {
+      opacity: 0.8;
+    }
+    
+    .mobile-notes-textarea {
+      width: 100%;
+      min-height: 120px;
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 16px;
+      resize: vertical;
+      background: white;
+      box-sizing: border-box;
+    }
+    
+    /* ==================== DESKTOP FULLSCREEN EDIT MODAL ==================== */
+    .desktop-edit-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 10000;
+      display: none;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    
+    .desktop-edit-modal.active {
+      display: flex;
+      opacity: 1;
+    }
+    
+    .desktop-edit-content {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      width: calc(100% - 40px);
+      height: calc(100% - 40px);
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    
+    .desktop-edit-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid #eee;
+      background: #f8f9fa;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    
+    .desktop-edit-body {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    
+    .desktop-edit-section {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 20px;
+      height: fit-content;
+    }
+    
+    .desktop-edit-section h4 {
+      margin: 0 0 16px 0;
+      font-size: 1.1em;
+      color: #333;
+      border-bottom: 2px solid #2196F3;
+      padding-bottom: 8px;
+    }
+    
+    @media (max-width: 1200px) {
+      .desktop-edit-body {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* ==================== MOBILE RESPONSIVE ==================== */
+    @media (max-width: 768px) {
+      /* Hide sidebar toggle on mobile since we use the mobile modal */
+      .sidebar-toggle {
+        display: none;
+      }
+      
+      /* Sidebar full width on mobile (hidden by default) */
+      .sidebar {
+        width: 100%;
+        right: -100%;
+        display: none; /* Hide sidebar completely on mobile */
+      }
+      
+      /* Smaller sidebar padding */
+      .sidebar-content {
+        padding: 15px;
+      }
+      
+      /* Top bar adjustments */
+      .top-bar {
+        font-size: 0.85em;
+      }
+      
+      .favorites-bar {
+        padding: 6px 8px;
+      }
+      
+      .legend-bar {
+        padding: 6px 8px;
+        font-size: 0.8em;
+        flex-wrap: wrap;
+      }
+      
+      .filter-badge {
+        font-size: 0.75em;
+        padding: 3px 8px;
+      }
+      
+      /* Bottom search bar */
+      .search-bar {
+        flex-wrap: wrap;
+        padding: 8px;
+        gap: 8px;
+      }
+      
+      .search-bar input,
+      .search-bar select {
+        flex: 1 1 45%;
+        min-width: 0;
+        font-size: 0.85em;
+      }
+      
+      .search-bar label {
+        flex: 1 1 40%;
+        font-size: 0.85em;
+      }
+      
+      .search-bar button {
+        flex: 1 1 100%;
+        padding: 10px;
+      }
+      
+      /* Tag input group mobile */
+      .tag-input-group {
+        flex-wrap: wrap;
+      }
+      
+      .tag-input-group input {
+        flex: 1 1 100%;
+      }
+      
+      .tag-input-group select {
+        flex: 1 1 60%;
+      }
+      
+      .tag-input-group button {
+        flex: 1 1 35%;
+      }
+      
+      /* Position form mobile */
+      .position-form input {
+        font-size: 16px; /* Prevent zoom on iOS */
+      }
+      
+      /* Make node labels smaller on mobile */
+      .node-label {
+        font-size: 10px;
+        padding: 1px 4px;
+      }
+      
+      /* Popup adjustments */
+      .leaflet-popup-content {
+        min-width: 260px;
+        max-width: calc(100vw - 60px);
+        font-size: 0.9em;
+      }
+      
+      .leaflet-popup-content-wrapper {
+        max-width: calc(100vw - 40px);
+      }
+      
+      /* Search results mobile */
+      .search-results {
+        max-height: 250px;
+      }
+      
+      .search-result-item {
+        padding: 10px;
+        font-size: 0.9em;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      /* Extra small screens */
+      .sidebar-toggle {
+        padding: 6px 10px;
+        font-size: 0.8em;
+      }
+      
+      .sidebar-header h3 {
+        font-size: 1em;
+      }
+      
+      .sidebar-content {
+        padding: 12px;
+      }
+      
+      .sidebar-section h4 {
+        font-size: 0.85em;
+      }
+      
+      .tag-chip {
+        font-size: 0.85em;
+        padding: 4px 8px;
+      }
+      
+      .position-info {
+        padding: 10px;
+        font-size: 0.85em;
+      }
+      
+      /* Stack everything in position form */
+      .position-form .button-group {
+        flex-direction: column;
+      }
+      
+      .position-form button {
+        width: 100%;
+      }
+      
+      /* Smaller node labels */
+      .node-label {
+        font-size: 9px;
+        padding: 1px 3px;
+      }
+    }
+    
+    /* Touch-friendly tap targets */
+    @media (pointer: coarse) {
+      .filter-badge,
+      .fav-chip,
+      .tag-chip .remove-tag,
+      .close-sidebar {
+        min-width: 44px;
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      
+      .node-label {
+        cursor: pointer;
+        -webkit-tap-highlight-color: rgba(0,0,0,0.1);
+      }
+    }
+    
+    /* Prevent text selection on touch devices */
+    @media (pointer: coarse) {
+      .filter-badge,
+      .fav-chip,
+      .tag-chip,
+      .node-label {
+        -webkit-user-select: none;
+        user-select: none;
+      }
+    }
   </style>
 </head>
 <body>
   <div id="loading" class="loading">Loading map...</div>
+  
+  <!-- Mobile Edit Modal -->
+  <div id="mobileEditModal" class="mobile-edit-modal">
+    <div class="mobile-edit-header">
+      <h3 id="mobileEditTitle">Rediger Node</h3>
+      <button class="mobile-edit-close" onclick="closeMobileEdit()">×</button>
+    </div>
+    <div class="mobile-edit-content">
+      <!-- Tags Section -->
+      <div class="mobile-edit-section">
+        <h4>🏷️ Tags</h4>
+        <div id="mobileTagList" class="mobile-tag-list">
+          <span style="color:#999; font-size:0.9em;">Ingen tags</span>
+        </div>
+        <div class="mobile-tag-input">
+          <input type="text" id="mobileTagInput" placeholder="Skriv ny tag...">
+          <select id="mobileTagType">
+            <option value="nickname">Kallenavn</option>
+            <option value="category">Kategori</option>
+            <option value="custom">Custom</option>
+          </select>
+          <button onclick="addMobileTag()">Legg til tag</button>
+        </div>
+      </div>
+      
+      <!-- Position Section -->
+      <div class="mobile-edit-section">
+        <h4>📍 Posisjon</h4>
+        <div id="mobilePositionInfo" class="mobile-position-info">
+          <div style="color:#999;">Ingen posisjon</div>
+        </div>
+        <div id="mobilePositionForm" style="display:none;">
+          <div class="mobile-position-form">
+            <input type="number" id="mobileLat" placeholder="Latitude (f.eks. 69.6812)" step="0.000001">
+            <input type="number" id="mobileLon" placeholder="Longitude (f.eks. 18.9895)" step="0.000001">
+            <input type="number" id="mobileAlt" placeholder="Altitude (meter)" step="1">
+            <div class="address-autocomplete">
+              <input type="text" id="mobileAddress" placeholder="Søk adresse (f.eks. Sentrum, Tromsø)" autocomplete="off"
+                     oninput="handleAddressInput(this, 'mobile', 'mobile')" 
+                     onkeydown="handleAddressKeydown(event, 'mobile', 'mobile')"
+                     onfocus="showAddressSuggestions('mobile', 'mobile')"
+                     onblur="hideAddressSuggestions('mobile', 'mobile')">
+              <div id="mobile-addr-suggestions-mobile" class="address-suggestions"></div>
+            </div>
+          </div>
+        </div>
+        <div class="mobile-button-group" id="mobilePositionButtons">
+          <button class="primary" onclick="showMobilePositionForm()">Sett posisjon</button>
+          <button class="danger" onclick="removeMobilePosition()" id="mobileRemovePositionBtn" style="display:none;">Fjern manuell posisjon</button>
+        </div>
+        <div class="mobile-button-group" id="mobilePositionSaveButtons" style="display:none;">
+          <button class="primary" onclick="saveMobilePosition()">Lagre posisjon</button>
+          <button class="secondary" onclick="hideMobilePositionForm()">Avbryt</button>
+        </div>
+      </div>
+      
+      <!-- Notes Section -->
+      <div class="mobile-edit-section">
+        <h4>📝 Notater</h4>
+        <textarea id="mobileNotesTextarea" class="mobile-notes-textarea" placeholder="Legg til notater om denne noden..."></textarea>
+        <div class="mobile-button-group">
+          <button class="primary" onclick="saveMobileNotes()">Lagre notater</button>
+        </div>
+      </div>
+      
+      <!-- Live Telemetry Section -->
+      <div class="mobile-edit-section" id="mobileTelemetrySection">
+        <h4 style="display: flex; align-items: center; gap: 8px;">
+          📊 Live Telemetri 
+          <span style="font-size: 0.7em; color: #4CAF50; font-weight: normal;">🔴 LIVE</span>
+        </h4>
+        <div style="background: #f8f9fa; padding: 12px; border-radius: 6px; border: 1px solid #e8f5e8;">
+          
+          <!-- Temperature & Environment -->
+          <div style="margin-bottom: 15px;">
+            <div style="font-weight: 600; margin-bottom: 8px; color: #2196F3;">🌡️ Temperature & Environment</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.85em;">
+              <div><strong>Temperatur:</strong> <span id="mobile-temperature">N/A</span></div>
+              <div><strong>Luftfuktighet:</strong> <span id="mobile-humidity">N/A</span></div>
+              <div><strong>Barometrisk trykk:</strong> <span id="mobile-pressure">N/A</span></div>
+              <div><strong>Gas resistanse:</strong> <span id="mobile-gas_resistance">N/A</span></div>
+            </div>
+          </div>
+
+          <!-- Power & Battery -->
+          <div style="margin-bottom: 15px;">
+            <div style="font-weight: 600; margin-bottom: 8px; color: #4CAF50;">🔋 Power & Battery</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.85em;">
+              <div><strong>Batteri:</strong> <span id="mobile-battery">N/A</span></div>
+              <div><strong>Spenning:</strong> <span id="mobile-voltage">N/A</span></div>
+              <div><strong>Strøm:</strong> <span id="mobile-current">N/A</span></div>
+              <div><strong>Power:</strong> <span id="mobile-power">N/A</span></div>
+            </div>
+          </div>
+
+          <!-- Air Quality -->
+          <div style="margin-bottom: 15px;">
+            <div style="font-weight: 600; margin-bottom: 8px; color: #FF9800;">🌬️ Air Quality</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.85em;">
+              <div><strong>PM1.0:</strong> <span id="mobile-pm10_standard">N/A</span></div>
+              <div><strong>PM2.5:</strong> <span id="mobile-pm25_standard">N/A</span></div>
+              <div><strong>PM10:</strong> <span id="mobile-pm100_standard">N/A</span></div>
+              <div><strong>IAQ Index:</strong> <span id="mobile-iaq">N/A</span></div>
+            </div>
+          </div>
+
+          <!-- Weather & Outdoor -->
+          <div style="margin-bottom: 15px;">
+            <div style="font-weight: 600; margin-bottom: 8px; color: #607D8B;">☀️ Weather & Outdoor</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.85em;">
+              <div><strong>Vind retning:</strong> <span id="mobile-wind_direction">N/A</span></div>
+              <div><strong>Vind hastighet:</strong> <span id="mobile-wind_speed">N/A</span></div>
+              <div><strong>Regn per time:</strong> <span id="mobile-rain_hourly">N/A</span></div>
+              <div><strong>UV Index:</strong> <span id="mobile-uv_index">N/A</span></div>
+            </div>
+          </div>
+
+          <!-- Light & Sensors -->
+          <div style="margin-bottom: 15px;">
+            <div style="font-weight: 600; margin-bottom: 8px; color: #FF5722;">💡 Light & Sensors</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.85em;">
+              <div><strong>Lux:</strong> <span id="mobile-lux">N/A</span></div>
+              <div><strong>PIR:</strong> <span id="mobile-pir">N/A</span></div>
+              <div><strong>Ambient lys:</strong> <span id="mobile-ambient_light">N/A</span></div>
+              <div><strong>Solar irradiance:</strong> <span id="mobile-solar_irradiance">N/A</span></div>
+            </div>
+          </div>
+
+          <!-- Network & Connectivity -->
+          <div style="margin-bottom: 15px;">
+            <div style="font-weight: 600; margin-bottom: 8px; color: #9C27B0;">📡 Network & Connectivity</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.85em;">
+              <div><strong>SNR:</strong> <span id="mobile-snr">N/A</span></div>
+              <div><strong>Høyde:</strong> <span id="mobile-altitude">N/A</span></div>
+              <div><strong>Kanal util:</strong> <span id="mobile-channel_utilization">N/A</span></div>
+              <div><strong>Air util TX:</strong> <span id="mobile-air_util_tx">N/A</span></div>
+            </div>
+          </div>
+          
+          <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #ddd; font-size: 0.85em; color: #666;">
+            <strong>Sist sett:</strong> <span id="mobile-lastheard">N/A</span> 
+            <span id="mobile-ago"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Desktop Fullscreen Edit Modal -->
+  <div id="desktopEditModal" class="desktop-edit-modal">
+    <div class="desktop-edit-content">
+      <div class="desktop-edit-header">
+        <h2 id="desktopEditTitle">Rediger Node</h2>
+        <button onclick="closeDesktopEdit()" style="background: #f44336; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 1em;">
+          ✕ Lukk
+        </button>
+      </div>
+      
+      <div class="desktop-edit-body">
+        <!-- Left Column -->
+        <div>
+          <!-- Tags Section -->
+          <div class="desktop-edit-section">
+            <h4>🏷️ Tags</h4>
+            <div id="desktopTagList" style="margin-bottom: 15px; min-height: 60px; display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; padding: 12px; background: #f8f9fa; border-radius: 6px; border: 2px dashed #ddd;">
+              <!-- Tags will be loaded here -->
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <input type="text" id="desktopNewTag" placeholder="Ny tag..." style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px;">
+              <select id="desktopTagType" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px;">
+                <option value="info">Info</option>
+                <option value="warning">Advarsel</option>
+                <option value="success">Suksess</option>
+              </select>
+              <button onclick="addDesktopTag()" style="background: #4CAF50; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 16px;">Legg til</button>
+            </div>
+          </div>
+          
+          <!-- Position Section -->
+          <div class="desktop-edit-section">
+            <h4>📍 Posisjon</h4>
+            <div id="desktopPositionInfo" style="margin-bottom: 15px; padding: 12px; background: #f8f9fa; border-radius: 6px;">
+              <!-- Position info will be loaded here -->
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <input type="number" id="desktop-lat" placeholder="Latitude (valgfri)" step="0.000001" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px;">
+              <input type="number" id="desktop-lon" placeholder="Longitude (valgfri)" step="0.000001" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px;">
+              <div class="address-autocomplete">
+                <input type="text" id="desktop-addr" placeholder="Søk adresse (f.eks. Sentrum, Tromsø)" autocomplete="off" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; box-sizing: border-box;" oninput="handleAddressInput(this, getActiveDesktopNodeId(), 'desktop')" onkeydown="handleAddressKeydown(event, getActiveDesktopNodeId(), 'desktop')" onfocus="showAddressSuggestions(getActiveDesktopNodeId(), 'desktop')" onblur="hideAddressSuggestions(getActiveDesktopNodeId(), 'desktop')">
+                <div id="desktop-addr-suggestions" class="address-suggestions"></div>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button onclick="saveDesktopPosition()" style="flex: 1; background: #2196F3; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 16px;">💾 Lagre posisjon</button>
+                <button onclick="removeDesktopPosition()" id="desktopRemovePositionBtn" style="background: #f44336; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 16px; display: none;">🗑️</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Right Column -->
+        <div>
+          <!-- Notes Section -->
+          <div class="desktop-edit-section">
+            <h4>📝 Notater</h4>
+            <textarea id="desktopNotesTextarea" style="width: 100%; height: 120px; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; resize: vertical; box-sizing: border-box;" placeholder="Legg til notater om denne noden..."></textarea>
+            <button onclick="saveDesktopNotes()" style="width: 100%; margin-top: 10px; background: #4CAF50; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; font-size: 16px;">Lagre notater</button>
+          </div>
+          
+          <!-- Live Telemetry Section -->
+          <div class="desktop-edit-section" id="desktopTelemetrySection">
+            <h4 style="display: flex; align-items: center; gap: 8px;">
+              📊 Live Telemetri 
+              <span style="font-size: 0.7em; color: #4CAF50; font-weight: normal;">🔴 LIVE</span>
+            </h4>
+            <div style="background: #f8f9fa; padding: 16px; border-radius: 6px; border: 1px solid #e8f5e8;">
+              
+              <!-- Temperature & Environment -->
+              <div style="margin-bottom: 20px;">
+                <div style="font-weight: 600; margin-bottom: 10px; color: #2196F3; font-size: 1.1em;">🌡️ Temperature & Environment</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.95em;">
+                  <div><strong>Temperatur:</strong> <span id="desktop-temperature">N/A</span></div>
+                  <div><strong>Luftfuktighet:</strong> <span id="desktop-humidity">N/A</span></div>
+                  <div><strong>Barometrisk trykk:</strong> <span id="desktop-pressure">N/A</span></div>
+                  <div><strong>Gas resistanse:</strong> <span id="desktop-gas_resistance">N/A</span></div>
+                </div>
+              </div>
+
+              <!-- Power & Battery -->
+              <div style="margin-bottom: 20px;">
+                <div style="font-weight: 600; margin-bottom: 10px; color: #4CAF50; font-size: 1.1em;">🔋 Power & Battery</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.95em;">
+                  <div><strong>Batteri:</strong> <span id="desktop-battery">N/A</span></div>
+                  <div><strong>Spenning:</strong> <span id="desktop-voltage">N/A</span></div>
+                  <div><strong>Strøm:</strong> <span id="desktop-current">N/A</span></div>
+                  <div><strong>Power:</strong> <span id="desktop-power">N/A</span></div>
+                </div>
+              </div>
+
+              <!-- Air Quality -->
+              <div style="margin-bottom: 20px;">
+                <div style="font-weight: 600; margin-bottom: 10px; color: #FF9800; font-size: 1.1em;">🌬️ Air Quality</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.95em;">
+                  <div><strong>PM1.0:</strong> <span id="desktop-pm10_standard">N/A</span></div>
+                  <div><strong>PM2.5:</strong> <span id="desktop-pm25_standard">N/A</span></div>
+                  <div><strong>PM10:</strong> <span id="desktop-pm100_standard">N/A</span></div>
+                  <div><strong>IAQ Index:</strong> <span id="desktop-iaq">N/A</span></div>
+                </div>
+              </div>
+
+              <!-- Weather & Outdoor -->
+              <div style="margin-bottom: 20px;">
+                <div style="font-weight: 600; margin-bottom: 10px; color: #607D8B; font-size: 1.1em;">☀️ Weather & Outdoor</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.95em;">
+                  <div><strong>Vind retning:</strong> <span id="desktop-wind_direction">N/A</span></div>
+                  <div><strong>Vind hastighet:</strong> <span id="desktop-wind_speed">N/A</span></div>
+                  <div><strong>Regn per time:</strong> <span id="desktop-rain_hourly">N/A</span></div>
+                  <div><strong>UV Index:</strong> <span id="desktop-uv_index">N/A</span></div>
+                </div>
+              </div>
+
+              <!-- Light & Sensors -->
+              <div style="margin-bottom: 20px;">
+                <div style="font-weight: 600; margin-bottom: 10px; color: #FF5722; font-size: 1.1em;">💡 Light & Sensors</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.95em;">
+                  <div><strong>Lux:</strong> <span id="desktop-lux">N/A</span></div>
+                  <div><strong>PIR:</strong> <span id="desktop-pir">N/A</span></div>
+                  <div><strong>Ambient lys:</strong> <span id="desktop-ambient_light">N/A</span></div>
+                  <div><strong>Solar irradiance:</strong> <span id="desktop-solar_irradiance">N/A</span></div>
+                </div>
+              </div>
+
+              <!-- Network & Connectivity -->
+              <div style="margin-bottom: 20px;">
+                <div style="font-weight: 600; margin-bottom: 10px; color: #9C27B0; font-size: 1.1em;">📡 Network & Connectivity</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.95em;">
+                  <div><strong>SNR:</strong> <span id="desktop-snr">N/A</span></div>
+                  <div><strong>Høyde:</strong> <span id="desktop-altitude">N/A</span></div>
+                  <div><strong>Kanal util:</strong> <span id="desktop-channel_utilization">N/A</span></div>
+                  <div><strong>Air util TX:</strong> <span id="desktop-air_util_tx">N/A</span></div>
+                </div>
+              </div>
+              
+              <div style="margin-top: 15px; padding-top: 12px; border-top: 1px solid #ddd; font-size: 0.9em; color: #666;">
+                <strong>Sist sett:</strong> <span id="desktop-lastheard">N/A</span> 
+                <span id="desktop-ago"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Sidebar toggle button -->
+  <button class="sidebar-toggle" onclick="toggleSidebar()">
+    📋 Administrer Noder
+  </button>
+  
+  <!-- Sidebar for node management -->
+  <div id="sidebar" class="sidebar">
+    <div class="sidebar-header">
+      <h3>Node-administrasjon</h3>
+      <button class="close-sidebar" onclick="toggleSidebar()">×</button>
+    </div>
+    <div class="sidebar-content">
+      <!-- Search section -->
+      <div class="sidebar-section">
+        <h4>Søk i alle noder</h4>
+        <input type="text" id="sidebarSearch" placeholder="Søk navn, ID eller tags..." 
+               style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 0.9em;">
+        <div id="searchResults" class="search-results" style="display: none;"></div>
+      </div>
+      
+      <!-- Node editor (shown when node is selected) -->
+      <div id="nodeEditor" class="sidebar-section" style="display: none;">
+        <h4 id="nodeEditorTitle">Node detaljer</h4>
+        
+        <!-- Tags -->
+        <div style="margin-bottom: 20px;">
+          <div style="font-weight: 600; margin-bottom: 8px;">Tags</div>
+          <div id="tagList" class="tag-list"></div>
+          <div class="tag-input-group">
+            <input type="text" id="newTagInput" placeholder="Ny tag...">
+            <select id="tagTypeSelect">
+              <option value="nickname">Kallenavn</option>
+              <option value="category">Kategori</option>
+              <option value="custom">Custom</option>
+            </select>
+            <button onclick="addTag()">Legg til</button>
+          </div>
+        </div>
+        
+        <!-- Position -->
+        <div style="margin-bottom: 20px;">
+          <div style="font-weight: 600; margin-bottom: 8px;">Posisjon</div>
+          <div id="positionInfo" class="position-info"></div>
+          <div id="positionForm" style="display: none;">
+            <div class="position-form">
+              <input type="number" id="manualLat" placeholder="Latitude (f.eks. 69.6812)" step="0.000001">
+              <input type="number" id="manualLon" placeholder="Longitude (f.eks. 18.9895)" step="0.000001">
+              <input type="number" id="manualAlt" placeholder="Altitude (meter)" step="1">
+              <input type="text" id="manualAddress" placeholder="Adresse (valgfritt)">
+              <div class="button-group">
+                <button class="primary" onclick="saveManualPosition()">Lagre</button>
+                <button class="secondary" onclick="cancelManualPosition()">Avbryt</button>
+              </div>
+            </div>
+          </div>
+          <div id="positionButtons" class="button-group" style="margin-top: 10px;">
+            <button class="primary" onclick="showPositionForm()">Sett posisjon</button>
+            <button class="danger" onclick="removeManualPosition()" id="removePositionBtn" style="display: none;">Fjern manuell</button>
+          </div>
+        </div>
+        
+        <!-- Notes -->
+        <div>
+          <div style="font-weight: 600; margin-bottom: 8px;">Notater</div>
+          <textarea id="notesTextarea" class="notes-textarea" placeholder="Legg til notater om denne noden..."></textarea>
+          <button class="primary" onclick="saveNotes()" style="width: 100%; margin-top: 10px;">Lagre notater</button>
+        </div>
+        
+        <!-- Live Telemetry in Edit Mode -->
+        <div id="edit-telemetry-${props.nodeId}" style="margin-top: 15px; padding: 12px; background: #f8f9fa; border-radius: 6px; border: 1px solid #e8f5e8;">
+          <div style="font-weight: 600; margin-bottom: 8px; color: #333; display: flex; align-items: center; gap: 8px;">
+            📊 Live Telemetri 
+            <span style="font-size: 0.7em; color: #4CAF50; font-weight: normal;">🔴 LIVE</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.85em;">
+            <div><strong>Batteri:</strong> <span id="edit-battery-${props.nodeId}">${props.batteryLevel ? `${props.batteryLevel}%` : 'N/A'}</span></div>
+            <div><strong>Spenning:</strong> <span id="edit-voltage-${props.nodeId}">${props.voltage ? `${props.voltage.toFixed(2)}V` : 'N/A'}</span></div>
+            <div><strong>SNR:</strong> <span id="edit-snr-${props.nodeId}">${props.snr ? `${props.snr} dB` : 'N/A'}</span></div>
+            <div><strong>Høyde:</strong> <span id="edit-altitude-${props.nodeId}">${props.altitude ? `${Math.round(props.altitude)}m` : 'N/A'}</span></div>
+            <div><strong>Kanal util:</strong> <span id="edit-channel-${props.nodeId}">${props.channelUtil ? `${props.channelUtil.toFixed(1)}%` : 'N/A'}</span></div>
+            <div><strong>Air util TX:</strong> <span id="edit-air-${props.nodeId}">${props.airUtilTx ? `${props.airUtilTx.toFixed(1)}%` : 'N/A'}</span></div>
+          </div>
+          <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #ddd; font-size: 0.8em; color: #666;">
+            <strong>Sist sett:</strong> <span id="edit-lastheard-${props.nodeId}">${props.lastHeardNorwegian || 'N/A'}</span>
+            <span id="edit-ago-${props.nodeId}">${props.lastHeardAgoSec ? `(${formatDuration(props.lastHeardAgoSec)})` : ''}</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Statistics -->
+      <div class="sidebar-section">
+        <h4>Statistikk</h4>
+        <div id="statsContent" style="font-size: 0.9em; color: #666;">
+          <div>Totalt noder: <strong id="totalNodes">-</strong></div>
+          <div>Med posisjon: <strong id="nodesWithPosition">-</strong></div>
+          <div>Uten posisjon: <strong id="nodesWithoutPosition">-</strong></div>
+        </div>
+      </div>
+    </div>
+  </div>
   
   <!-- Top bar with favorites and legend -->
   <div class="top-bar">
@@ -373,7 +1683,12 @@
   
   <!-- Bottom search bar -->
   <div class="search-bar">
-    <input id="searchInput" type="text" placeholder="Search node..." autocomplete="off">
+    <input id="searchInput" type="text" placeholder="Søk node eller tag..." autocomplete="off">
+    <select id="searchMode">
+      <option value="all">Alle resultater</option>
+      <option value="nodes">Kun noder</option>
+      <option value="tags">Kun tags</option>
+    </select>
     <select id="telemetryFilter">
       <option value="all">Alle noder</option>
       <option value="any_sensor">Noder med sensorer</option>
@@ -388,6 +1703,10 @@
   
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
+    // ==================== CONFIGURATION ====================
+    const API_KEY = 'meshtastic-secret-2025';
+    const API_BASE_URL = `${window.location.protocol}//${window.location.hostname}:${window.location.port}`;  // Same port as web server
+    
     // Initialize map - will auto-zoom to show all nodes on load
     const map = L.map('map', {
       zoomControl: true,
@@ -426,6 +1745,11 @@
     let favorites = new Set();
     let activeFilter = null;
     let isFirstLoad = true;
+    // Auto-refresh and live update state
+    let autoRefreshInterval = null;
+    let isEditingNode = false;
+    let activeNodeId = null;
+    let liveUpdateInterval = null;
     
     // Hide loading after map loads
     map.whenReady(() => {
@@ -437,7 +1761,13 @@
       activeFilter = null;
       document.getElementById('searchInput').value = '';
       document.getElementById('telemetryFilter').value = 'all';
+      document.getElementById('searchMode').value = 'all';
       document.querySelectorAll('.filter-badge').forEach(b => b.classList.remove('active'));
+      
+      // Re-enable auto-refresh when resetting
+      isEditingNode = false;
+      startAutoRefresh();
+      
       renderNodes();
       
       // Zoom to show all nodes
@@ -450,6 +1780,266 @@
         // Fallback to Europe view if no nodes
         map.setView([50, 10], 4);
       }
+    }
+    
+    // Auto-refresh control functions
+    function startAutoRefresh() {
+      if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+      }
+      
+      autoRefreshInterval = setInterval(() => {
+        if (!isEditingNode) {  // Only refresh if not editing
+          loadNodes();
+          loadTrails();
+        }
+      }, 60000); // Update every minute
+    }
+    
+    function stopAutoRefresh() {
+      if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
+      }
+    }
+    
+    function pauseAutoRefresh() {
+      isEditingNode = true;
+    }
+    
+    function resumeAutoRefresh() {
+      isEditingNode = false;
+    }
+    
+    // Live updates for active node
+    function startLiveNodeUpdate(nodeId) {
+      activeNodeId = nodeId;
+      // Update every 10 seconds for live data
+      liveUpdateInterval = setInterval(() => {
+        updateActiveNodeData(nodeId);
+      }, 10000);
+      
+      // Initial update
+      setTimeout(() => updateActiveNodeData(nodeId), 1000);
+    }
+    
+    function stopLiveNodeUpdate() {
+      // Hide live indicator
+      if (activeNodeId) {
+        const liveIndicator = document.getElementById(`live-indicator-${activeNodeId}`);
+        if (liveIndicator) {
+          liveIndicator.style.display = 'none';
+        }
+      }
+      
+      activeNodeId = null;
+      if (liveUpdateInterval) {
+        clearInterval(liveUpdateInterval);
+        liveUpdateInterval = null;
+      }
+    }
+    
+    async function updateActiveNodeData(nodeId) {
+      if (!activeNodeId || activeNodeId !== nodeId) return;
+      
+      try {
+        // Fetch updated node data
+        const response = await fetch(`${API_BASE_URL}/api/nodes.geojson`, {
+          headers: { 'Authorization': `Bearer ${API_KEY}` }
+        });
+        const data = await response.json();
+        
+        // Find the specific node
+        const updatedNode = data.features.find(f => f.properties.nodeId === nodeId);
+        if (!updatedNode) return;
+        
+        const props = updatedNode.properties;
+        
+        // Show live indicator
+        const liveIndicator = document.getElementById(`live-indicator-${nodeId}`);
+        if (liveIndicator) {
+          liveIndicator.style.display = 'block';
+          // Flash effect
+          liveIndicator.style.opacity = '1';
+          setTimeout(() => {
+            if (liveIndicator) liveIndicator.style.opacity = '0.7';
+          }, 500);
+        }
+        
+        // Update telemetry table in popup
+        const telemetryTable = document.getElementById(`telemetry-table-${nodeId}`);
+        if (telemetryTable) {
+          const telemetryRows = [
+            ['Batteri', props.batteryLevel ? `${props.batteryLevel}%` : 'N/A'],
+            ['Spenning', props.voltage ? `${props.voltage.toFixed(2)}V` : 'N/A'],
+            ['SNR (vår måling)', props.snr ? `${props.snr} dB` : 'N/A'],
+            ['Høyde', props.altitude ? `${Math.round(props.altitude)}m` : 'N/A'],
+            ['Kanal util.', props.channelUtil ? `${props.channelUtil.toFixed(1)}%` : 'N/A'],
+            ['Air util. TX', props.airUtilTx ? `${props.airUtilTx.toFixed(1)}%` : 'N/A'],
+            ['Sist sett', props.lastHeardNorwegian || 'N/A'],
+            ['For', props.lastHeardAgoSec ? formatDuration(props.lastHeardAgoSec) : 'N/A']
+          ];
+          
+          // Update only telemetry rows (skip basic info and separators)
+          const rows = telemetryTable.querySelectorAll('tr');
+          let telemetryStartIndex = -1;
+          
+          // Find where telemetry data starts (after first separator)
+          for (let i = 0; i < rows.length; i++) {
+            const thElement = rows[i].querySelector('th');
+            if (thElement && thElement.textContent === 'Batteri:') {
+              telemetryStartIndex = i;
+              break;
+            }
+          }
+          
+          if (telemetryStartIndex >= 0) {
+            telemetryRows.forEach(([key, val], index) => {
+              const rowIndex = telemetryStartIndex + index;
+              if (rows[rowIndex] && val !== 'N/A') {
+                const tdElement = rows[rowIndex].querySelector('td');
+                if (tdElement) {
+                  tdElement.textContent = val;
+                  // Flash effect for updated values
+                  tdElement.style.backgroundColor = '#e8f5e8';
+                  setTimeout(() => {
+                    if (tdElement) tdElement.style.backgroundColor = '';
+                  }, 1000);
+                }
+              }
+            });
+          }
+        }
+        
+        // Update mobile modal if open
+        if (currentMobileNodeId === nodeId) {
+          updateMobileTelemetryData(props);
+        }
+        
+        // Update edit mode telemetry if visible
+        const editSection = document.getElementById(`edit-section-${nodeId}`);
+        if (editSection && editSection.style.display !== 'none') {
+          updateEditModeTelemetry(nodeId, props);
+        }
+        
+        // Update desktop modal telemetry if open
+        if (currentDesktopNodeId === nodeId) {
+          updateDesktopTelemetryData(props);
+        }
+        
+      } catch (error) {
+        console.log('Live update failed:', error);
+      }
+    }
+    
+    function updateEditModeTelemetry(nodeId, props) {
+      // Update individual telemetry fields in edit mode
+      const fields = [
+        ['edit-battery', props.batteryLevel ? `${props.batteryLevel}%` : 'N/A'],
+        ['edit-voltage', props.voltage ? `${props.voltage.toFixed(2)}V` : 'N/A'],
+        ['edit-snr', props.snr ? `${props.snr} dB` : 'N/A'],
+        ['edit-altitude', props.altitude ? `${Math.round(props.altitude)}m` : 'N/A'],
+        ['edit-channel', props.channelUtil ? `${props.channelUtil.toFixed(1)}%` : 'N/A'],
+        ['edit-air', props.airUtilTx ? `${props.airUtilTx.toFixed(1)}%` : 'N/A'],
+        ['edit-lastheard', props.lastHeardNorwegian || 'N/A'],
+        ['edit-ago', props.lastHeardAgoSec ? `(${formatDuration(props.lastHeardAgoSec)})` : '']
+      ];
+      
+      fields.forEach(([fieldId, value]) => {
+        const element = document.getElementById(`${fieldId}-${nodeId}`);
+        if (element && element.textContent !== value) {
+          element.textContent = value;
+          // Flash effect for updated values
+          element.style.backgroundColor = '#e8f5e8';
+          setTimeout(() => {
+            if (element) element.style.backgroundColor = '';
+          }, 1000);
+        }
+      });
+    }
+    
+    function updateMobileTelemetryData(props) {
+      console.log('updateMobileTelemetryData called with:', props);
+      
+      // Update mobile position info
+      const posInfo = document.getElementById('mobilePositionInfo');
+      const removeBtn = document.getElementById('mobileRemovePositionBtn');
+      
+      if (props.positionSource === 'manual') {
+        posInfo.innerHTML = `
+          <div style="font-weight: 600; margin-bottom: 4px;">Manuell posisjon:</div>
+          <div style="font-family: monospace; color: #333;">${props.latitude.toFixed(6)}, ${props.longitude.toFixed(6)}</div>
+          ${props.altitude ? `<div style="color: #666;">Høyde: ${props.altitude}m</div>` : ''}
+          ${props.address ? `<div style="color: #666;">${props.address}</div>` : ''}
+        `;
+        removeBtn.style.display = 'block';
+      } else if (props.positionSource === 'gps') {
+        posInfo.innerHTML = `
+          <div style="font-weight: 600; margin-bottom: 4px;">GPS posisjon:</div>
+          <div style="font-family: monospace; color: #333;">${props.latitude.toFixed(6)}, ${props.longitude.toFixed(6)}</div>
+          ${props.altitude ? `<div style="color: #666;">Høyde: ${props.altitude}m</div>` : ''}
+          <div style="color: #4CAF50; font-size: 0.85em; margin-top: 4px;">📡 Fra GPS</div>
+        `;
+        removeBtn.style.display = 'none';
+      } else {
+        posInfo.innerHTML = '<div style="color: #999;">Ingen posisjon</div>';
+        removeBtn.style.display = 'none';
+      }
+      
+      // Update mobile telemetry fields
+      const mobileFields = [
+        // Temperature & Environment
+        ['mobile-temperature', props.temperature ? `${props.temperature.toFixed(1)}°C` : 'N/A'],
+        ['mobile-humidity', props.humidity ? `${props.humidity.toFixed(1)}%` : 'N/A'],
+        ['mobile-pressure', props.pressure ? `${props.pressure.toFixed(1)} hPa` : 'N/A'],
+        ['mobile-gas_resistance', props.gas_resistance ? `${props.gas_resistance.toFixed(0)} Ω` : 'N/A'],
+        
+        // Power & Battery
+        ['mobile-battery', props.batteryLevel ? `${props.batteryLevel}%` : 'N/A'],
+        ['mobile-voltage', props.voltage ? `${props.voltage.toFixed(2)}V` : 'N/A'],
+        ['mobile-current', props.current ? `${props.current.toFixed(0)}mA` : 'N/A'],
+        ['mobile-power', props.power ? `${props.power.toFixed(1)}W` : 'N/A'],
+        
+        // Air Quality
+        ['mobile-pm10_standard', props.pm10_standard ? `${props.pm10_standard} μg/m³` : 'N/A'],
+        ['mobile-pm25_standard', props.pm25_standard ? `${props.pm25_standard} μg/m³` : 'N/A'],
+        ['mobile-pm100_standard', props.pm100_standard ? `${props.pm100_standard} μg/m³` : 'N/A'],
+        ['mobile-iaq', props.iaq ? `${props.iaq}` : 'N/A'],
+        
+        // Weather & Outdoor
+        ['mobile-wind_direction', props.wind_direction ? `${props.wind_direction}°` : 'N/A'],
+        ['mobile-wind_speed', props.wind_speed ? `${props.wind_speed.toFixed(1)} m/s` : 'N/A'],
+        ['mobile-rain_hourly', props.rain_hourly ? `${props.rain_hourly.toFixed(1)} mm` : 'N/A'],
+        ['mobile-uv_index', props.uv_index ? `${props.uv_index}` : 'N/A'],
+        
+        // Light & Sensors
+        ['mobile-lux', props.lux ? `${props.lux.toFixed(0)} lx` : 'N/A'],
+        ['mobile-pir', props.pir ? (props.pir ? 'Aktivert' : 'Ikke aktivert') : 'N/A'],
+        ['mobile-ambient_light', props.ambient_light ? `${props.ambient_light.toFixed(0)} lx` : 'N/A'],
+        ['mobile-solar_irradiance', props.solar_irradiance ? `${props.solar_irradiance.toFixed(1)} W/m²` : 'N/A'],
+        
+        // Network & Connectivity
+        ['mobile-snr', props.snr ? `${props.snr} dB` : 'N/A'],
+        ['mobile-altitude', props.altitude ? `${Math.round(props.altitude)}m` : 'N/A'],
+        ['mobile-channel_utilization', props.channelUtil ? `${props.channelUtil.toFixed(1)}%` : 'N/A'],
+        ['mobile-air_util_tx', props.airUtilTx ? `${props.airUtilTx.toFixed(1)}%` : 'N/A'],
+        
+        ['mobile-lastheard', props.lastHeardNorwegian || 'N/A'],
+        ['mobile-ago', props.lastHeardAgoSec ? `(${formatDuration(props.lastHeardAgoSec)})` : '']
+      ];
+      
+      mobileFields.forEach(([fieldId, value]) => {
+        const element = document.getElementById(fieldId);
+        console.log('Updating mobile field:', fieldId, 'Element found:', !!element, 'Value:', value);
+        if (element && element.textContent !== value) {
+          element.textContent = value;
+          // Flash effect for updated values
+          element.style.backgroundColor = '#e8f5e8';
+          setTimeout(() => {
+            if (element) element.style.backgroundColor = '';
+          }, 1000);
+        }
+      });
     }
     
     // Update favorites bar
@@ -527,17 +2117,96 @@
         statusText = 'Offline';
       }
       
-      let html = `<div class="popup">
+      let html = `<div class="popup" id="popup-${props.nodeId}">
         <h3>
           ${props.longName || props.nodeId}
-          <button class="fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${props.nodeId}')">
-            ${isFav ? '★ Favoritt' : '☆ Legg til'}
-          </button>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button class="fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${props.nodeId}')">
+              ${isFav ? '★ Favoritt' : '☆ Legg til'}
+            </button>
+            <div id="live-indicator-${props.nodeId}" style="font-size:0.7em; color:#4CAF50; font-weight:normal; display:none;">
+              🔴 LIVE
+            </div>
+          </div>
         </h3>
-        <div style="margin-bottom:10px; padding:6px; background:${statusColor}22; border-left:3px solid ${statusColor}; border-radius:3px;">
-          <strong style="color:${statusColor}">⬤ ${statusText}</strong>
+        <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
+          <div style="flex:1; padding:6px; background:${statusColor}22; border-left:3px solid ${statusColor}; border-radius:3px;">
+            <strong style="color:${statusColor}">⬤ ${statusText}</strong>
+          </div>
+          <button onclick="handleEditClick('${props.nodeId}')" style="background:#2196F3; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:0.9em; white-space:nowrap;">
+            ✏️ Rediger
+          </button>
         </div>
-        <table>`;
+        
+        <!-- Edit mode section (hidden by default) -->
+        <div id="edit-section-${props.nodeId}" style="display:none; margin-bottom:15px; padding:12px; background:#f8f9fa; border-radius:6px; border:2px solid #2196F3;">
+          <h4 style="margin:0 0 10px 0; font-size:0.95em; color:#333;">🏷️ Tags</h4>
+          <div id="popup-tags-${props.nodeId}" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;">
+            ${props.tags && props.tags.length > 0 ? 
+              props.tags.map(t => `
+                <span class="tag-chip ${t.type}" style="font-size:0.85em;">
+                  ${t.tag}
+                  <span class="remove-tag" onclick="removeTagFromPopup('${props.nodeId}', '${t.tag}')">×</span>
+                </span>
+              `).join('') : 
+              '<span style="color:#999; font-size:0.85em;">Ingen tags</span>'
+            }
+          </div>
+          <div style="display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;">
+            <input type="text" id="popup-tag-input-${props.nodeId}" placeholder="Ny tag..." 
+                   style="flex:1; min-width:120px; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:16px; box-sizing:border-box;">
+            <select id="popup-tag-type-${props.nodeId}" 
+                    style="padding:8px; border:1px solid #ddd; border-radius:4px; font-size:14px; max-width:110px;">
+              <option value="nickname">Kallenavn</option>
+              <option value="category">Kategori</option>
+              <option value="custom">Custom</option>
+            </select>
+            <button onclick="addTagFromPopup('${props.nodeId}')" 
+                    style="background:#27ae60; color:white; border:none; padding:6px 10px; border-radius:4px; cursor:pointer; font-size:16px; font-weight:bold; min-width:40px; flex-shrink:0; box-shadow:0 1px 3px rgba(0,0,0,0.2);">
+              ➕
+            </button>
+          </div>
+          
+          <h4 style="margin:12px 0 8px 0; font-size:0.95em; color:#333;">📍 Manuell posisjon</h4>
+          <div style="margin-bottom:8px; font-size:0.85em; color:#666;">
+            ${props.positionSource === 'manual' ? 
+              `<div style="color:#FF9800;">✓ Manuell posisjon aktiv</div>` : 
+              props.latitude ? 
+                `<div style="color:#4CAF50;">✓ GPS-posisjon</div>` : 
+                `<div style="color:#999;">Ingen posisjon</div>`
+            }
+            <div style="margin-top:4px; font-style:italic;">Minst ett felt må fylles (koordinater eller adresse)</div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:6px; width:100%;">
+            <input type="number" id="popup-lat-${props.nodeId}" placeholder="Latitude (valgfri)" step="0.000001"
+                   style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:16px; box-sizing:border-box;">
+            <input type="number" id="popup-lon-${props.nodeId}" placeholder="Longitude (valgfri)" step="0.000001"
+                   style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:16px; box-sizing:border-box;">
+            <div class="address-autocomplete">
+              <input type="text" id="popup-addr-${props.nodeId}" placeholder="Søk adresse (f.eks. Sentrum, Tromsø)" autocomplete="off"
+                     style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:16px; box-sizing:border-box;"
+                     oninput="handleAddressInput(this, '${props.nodeId}', 'popup')" 
+                     onkeydown="handleAddressKeydown(event, '${props.nodeId}', 'popup')"
+                     onfocus="showAddressSuggestions('${props.nodeId}', 'popup')"
+                     onblur="hideAddressSuggestions('${props.nodeId}', 'popup')">
+              <div id="popup-addr-suggestions-${props.nodeId}" class="address-suggestions"></div>
+            </div>
+            <div style="display:flex; gap:6px;">
+              <button onclick="savePositionFromPopup('${props.nodeId}')" 
+                      style="flex:1; background:#2196F3; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer; font-size:0.85em;">
+                💾 Lagre posisjon
+              </button>
+              ${props.positionSource === 'manual' ? 
+                `<button onclick="removePositionFromPopup('${props.nodeId}')" 
+                        style="background:#f44336; color:white; border:none; padding:8px 12px; border-radius:4px; cursor:pointer; font-size:0.85em;">
+                  🗑️
+                </button>` : ''
+              }
+            </div>
+          </div>
+        </div>
+        
+        <table id="telemetry-table-${props.nodeId}">`;
       
       const rows = [
         ['Node ID', props.nodeId],
@@ -607,6 +2276,7 @@
           console.log('Loaded nodes:', data.features.length);
           allNodes = data.features;
           renderNodes();
+          updateStatistics(); // Update statistics after loading nodes
           
           // Auto-zoom to show all nodes ONLY on first load
           if (isFirstLoad && allNodes.length > 0 && nodesLayer.getLayers().length > 0) {
@@ -618,6 +2288,52 @@
           }
         })
         .catch(err => console.error('Error loading nodes:', err));
+    }
+    
+    // Function to check if two positions are within clustering distance
+    function areNodesClose(lat1, lon1, lat2, lon2, distanceMeters = 10) {
+      const R = 6371000; // Earth radius in meters
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      const distance = R * c;
+      return distance <= distanceMeters;
+    }
+    
+    // Function to cluster features by position
+    function clusterFeatures(features) {
+      const clusters = [];
+      const processed = new Set();
+      
+      features.forEach((feature, idx) => {
+        if (processed.has(idx)) return;
+        
+        const cluster = [idx];
+        processed.add(idx);
+        
+        const lat1 = feature.geometry.coordinates[1];
+        const lon1 = feature.geometry.coordinates[0];
+        
+        // Find all other nodes within clustering distance
+        features.forEach((other, otherIdx) => {
+          if (processed.has(otherIdx)) return;
+          
+          const lat2 = other.geometry.coordinates[1];
+          const lon2 = other.geometry.coordinates[0];
+          
+          if (areNodesClose(lat1, lon1, lat2, lon2)) {
+            cluster.push(otherIdx);
+            processed.add(otherIdx);
+          }
+        });
+        
+        clusters.push(cluster);
+      });
+      
+      return clusters;
     }
     
     function loadTrails() {
@@ -664,8 +2380,9 @@
       // Count nodes by status
       let counts = {favorite: 0, online: 0, recent: 0, offline: 0};
       let displayed = 0;
-      let filteredNodes = [];
+      let filteredFeatures = [];
       
+      // First pass: Filter nodes
       allNodes.forEach(f => {
         const props = f.properties;
         // Check both server favorites and local favorites
@@ -705,62 +2422,127 @@
         
         if (searchTerm && !searchable.includes(searchTerm)) return;
         
-        // Determine color based on status
-        let color = '#999999';  // Default grey for unknown/offline
-        if (isFav) {
-          color = '#3388ff';  // Blue for favorites
-        } else if (props.status === 'online') {
-          color = '#4CAF50';  // Green for online
-        } else if (props.status === 'recent') {
-          color = '#FFA726';  // Orange/yellow for recent
-        } else {
-          color = '#999999';  // Grey for offline/unknown
-        }
-        
-        // Determine if local node (USB/WiFi) or global (MQTT)
-        const isLocal = props.source && (props.source.includes('USB') || props.source.includes('WiFi'));
-        
-        const marker = L.circleMarker([f.geometry.coordinates[1], f.geometry.coordinates[0]], {
-          radius: isFav ? 8 : (isLocal ? 7 : 6),
-          fillColor: color,
-          color: isLocal ? '#000' : '#fff',  // Black ring for local, white for MQTT
-          weight: isLocal ? 2.5 : 1.5,
-          opacity: 1,
-          fillOpacity: isLocal ? 0.9 : 0.7
+        // Store extended properties
+        filteredFeatures.push({
+          feature: f,
+          isFav: isFav,
+          props: props
         });
+      });
+      
+      // Second pass: Cluster nodes by position
+      const clusters = clusterFeatures(filteredFeatures.map(ff => ff.feature));
+      
+      // Third pass: Render clusters with stacked labels
+      clusters.forEach(clusterIndices => {
+        const clusterFeatures = clusterIndices.map(idx => filteredFeatures[idx]);
         
-        // Add permanent label with long_name
-        const labelText = props.longName || props.shortName || props.nodeId.substring(1, 5);
-        let labelClass = 'node-label';
-        if (isFav) labelClass += ' favorite';
-        else if (props.status === 'online') labelClass += ' online';
-        else if (props.status === 'recent') labelClass += ' recent';
-        else labelClass += ' offline';
+        // Use the first node's position for the cluster center
+        const centerFeature = clusterFeatures[0].feature;
+        const centerLat = centerFeature.geometry.coordinates[1];
+        const centerLon = centerFeature.geometry.coordinates[0];
         
-        const label = L.marker([f.geometry.coordinates[1], f.geometry.coordinates[0]], {
-          icon: L.divIcon({
-            className: labelClass,
-            html: labelText,
-            iconSize: null,
-            iconAnchor: [-8, 18]  // Position label above marker
-          })
+        // Render each node in the cluster
+        clusterFeatures.forEach((ff, stackIndex) => {
+          const f = ff.feature;
+          const props = ff.props;
+          const isFav = ff.isFav;
+          
+          // Determine color based on status
+          let color = '#999999';  // Default grey for unknown/offline
+          if (isFav) {
+            color = '#3388ff';  // Blue for favorites
+          } else if (props.status === 'online') {
+            color = '#4CAF50';  // Green for online
+          } else if (props.status === 'recent') {
+            color = '#FFA726';  // Orange/yellow for recent
+          } else {
+            color = '#999999';  // Grey for offline/unknown
+          }
+          
+          // Determine if local node (USB/WiFi) or global (MQTT)
+          const isLocal = props.source && (props.source.includes('USB') || props.source.includes('WiFi'));
+          
+          const marker = L.circleMarker([f.geometry.coordinates[1], f.geometry.coordinates[0]], {
+            radius: isFav ? 8 : (isLocal ? 7 : 6),
+            fillColor: color,
+            color: isLocal ? '#000' : '#fff',  // Black ring for local, white for MQTT
+            weight: isLocal ? 2.5 : 1.5,
+            opacity: 1,
+            fillOpacity: isLocal ? 0.9 : 0.7
+          });
+          
+          // Add permanent label with long_name (stacked vertically for clusters)
+          const labelText = props.longName || props.shortName || props.nodeId.substring(1, 5);
+          let labelClass = 'node-label';
+          if (isFav) labelClass += ' favorite';
+          else if (props.status === 'online') labelClass += ' online';
+          else if (props.status === 'recent') labelClass += ' recent';
+          else labelClass += ' offline';
+          
+          // Calculate vertical offset for stacked labels (25px per label)
+          const verticalOffset = 18 + (stackIndex * 25);
+          
+          const label = L.marker([centerLat, centerLon], {
+            icon: L.divIcon({
+              className: labelClass,
+              html: labelText,
+              iconSize: null,
+              iconAnchor: [-8, verticalOffset]  // Stack labels vertically
+            })
+          });
+          
+          // Only show labels at zoom level 10+
+          const currentZoom = map.getZoom();
+          if (currentZoom >= 10) {
+            label.addTo(nodesLayer);
+          }
+          
+          // Store reference to marker in label for click handling
+          label._nodeMarker = marker;
+          
+          // Make label clickable - opens the associated marker's popup and zooms to it
+          label.on('click', function() {
+            // Zoom to node location
+            map.setView([props.latitude, props.longitude], Math.max(map.getZoom(), 13), {
+              animate: true,
+              duration: 0.5
+            });
+            // Small delay to ensure zoom happens before popup opens
+            setTimeout(() => {
+              marker.openPopup();
+            }, 200);
+          });
+          
+          // Update label visibility on zoom
+          marker._labelMarker = label;
+          
+          // Add isFavorite status to props for popup
+          const popupProps = {...props, isFavorite: isFav};
+          marker.bindPopup(createPopupContent(popupProps), { maxWidth: 300 });
+          
+          // Add click event to zoom to node when popup opens
+          marker.on('popupopen', function() {
+            // Zoom to node location with some padding
+            setTimeout(() => {
+              map.setView([props.latitude, props.longitude], Math.max(map.getZoom(), 13), {
+                animate: true,
+                duration: 0.5
+              });
+            }, 100);
+            
+            // Start live updates for this node
+            startLiveNodeUpdate(props.nodeId);
+          });
+          
+          // Stop live updates when popup closes
+          marker.on('popupclose', function() {
+            stopLiveNodeUpdate();
+          });
+          
+          marker.addTo(nodesLayer);
+          displayed++;
         });
-        
-        // Only show labels at zoom level 10+
-        const currentZoom = map.getZoom();
-        if (currentZoom >= 10) {
-          label.addTo(nodesLayer);
-        }
-        
-        // Update label visibility on zoom
-        marker._labelMarker = label;
-        
-        // Add isFavorite status to props for popup
-        const popupProps = {...props, isFavorite: isFav};
-        marker.bindPopup(createPopupContent(popupProps), { maxWidth: 300 });
-        marker.addTo(nodesLayer);
-        filteredNodes.push(f);
-        displayed++;
       });
       
       // Update counts
@@ -777,33 +2559,8 @@
         emptyState.classList.add('hidden');
       }
       
-      // Auto-zoom to displayed nodes if filter or search is active
-      console.log('Zoom check:', {activeFilter, searchTerm, displayed});
-      if ((activeFilter || searchTerm) && displayed > 0) {
-        console.log('Zoom condition met, waiting for markers...');
-        // Use setTimeout to ensure markers are added to map before getting bounds
-        setTimeout(() => {
-          const layerCount = nodesLayer.getLayers().length;
-          console.log('Layers in nodesLayer:', layerCount);
-          
-          if (layerCount > 0) {
-            const bounds = nodesLayer.getBounds();
-            console.log('Bounds:', bounds);
-            console.log('Bounds valid:', bounds.isValid());
-            
-            if (bounds.isValid()) {
-              // Adjust max zoom based on number of displayed nodes
-              let maxZoom = 15;
-              if (displayed === 1) maxZoom = 14;  // Single node: zoom closer
-              else if (displayed <= 3) maxZoom = 13;  // Few nodes: moderate zoom
-              else if (displayed <= 10) maxZoom = 12;  // Several nodes: wider view
-              
-              console.log(`Auto-zooming to ${displayed} nodes with maxZoom ${maxZoom}`);
-              map.fitBounds(bounds, { padding: [50, 50], maxZoom: maxZoom });
-            }
-          }
-        }, 100);
-      }
+      // Auto-zoom disabled to prevent unwanted map movements when editing
+      // Users can manually zoom or use Reset View button
     }
     
     // Toggle favorite function (called from popup button)
@@ -857,6 +2614,25 @@
         }
         
         renderNodes();
+        
+        // Auto-zoom to filtered nodes
+        setTimeout(() => {
+          if (activeFilter && nodesLayer.getLayers().length > 0) {
+            const bounds = nodesLayer.getBounds();
+            if (bounds.isValid()) {
+              console.log('Zooming to filtered nodes:', activeFilter, 'Layers:', nodesLayer.getLayers().length);
+              map.fitBounds(bounds, { 
+                padding: [50, 50],
+                animate: true,
+                duration: 0.8 
+              });
+            } else {
+              console.log('Invalid bounds for zoom');
+            }
+          } else {
+            console.log('No active filter or no layers:', activeFilter, nodesLayer.getLayers().length);
+          }
+        }, 300); // Increased timeout for mobile
       });
     });
     
@@ -865,15 +2641,1581 @@
     loadNodes();
     loadTrails();
     
-    setInterval(() => {
-      loadNodes();
-      loadTrails();
-    }, 60000); // Update every minute
+    // Start auto-refresh
+    startAutoRefresh();
     
     // Handle orientation changes on mobile
     window.addEventListener('orientationchange', () => {
       setTimeout(() => map.invalidateSize(), 100);
     });
+    
+    // ==================== SIDEBAR FUNCTIONALITY ====================
+    
+    let currentNodeId = null;
+    
+    function toggleSidebar() {
+      const sidebar = document.getElementById('sidebar');
+      sidebar.classList.toggle('open');
+    }
+    
+    // Search nodes
+    let searchTimeout;
+    document.getElementById('sidebarSearch').addEventListener('input', (e) => {
+      clearTimeout(searchTimeout);
+      const query = e.target.value.trim();
+      
+      if (query.length < 2) {
+        document.getElementById('searchResults').style.display = 'none';
+        return;
+      }
+      
+      searchTimeout = setTimeout(() => searchNodes(query), 300);
+    });
+    
+    async function searchNodes(query) {
+      try {
+        // Use client-side search on existing geojson data
+        const response = await fetch(`${API_BASE_URL}/nodes.geojson`);
+        const geojsonData = await response.json();
+        
+        const lowerQuery = query.toLowerCase();
+        const matchingNodes = [];
+        
+        geojsonData.features.forEach(feature => {
+          const props = feature.properties;
+          const coords = feature.geometry.coordinates;
+          
+          // Search in longName, shortName, nodeId
+          const searchFields = [
+            props.longName || '',
+            props.shortName || '',
+            props.nodeId || ''
+          ].join(' ').toLowerCase();
+          
+          if (searchFields.includes(lowerQuery)) {
+            matchingNodes.push({
+              node_id: props.nodeId,
+              long_name: props.longName,
+              short_name: props.shortName,
+              latitude: coords[1],
+              longitude: coords[0],
+              has_position: coords[1] && coords[0],
+              status: props.status
+            });
+          }
+        });
+        
+        const resultsDiv = document.getElementById('searchResults');
+        if (matchingNodes.length === 0) {
+          resultsDiv.innerHTML = '<div style="padding: 12px; text-align: center; color: #999;">Ingen resultater</div>';
+          resultsDiv.style.display = 'block';
+          return;
+        }
+        
+        resultsDiv.innerHTML = matchingNodes.map(node => `
+          <div class="search-result-item" onclick="selectNode('${node.node_id}', ${node.latitude}, ${node.longitude})">
+            <div class="node-info">
+              <div class="node-name">${node.long_name || node.short_name || node.node_id}</div>
+              <div class="node-id">${node.node_id}</div>
+              <div style="font-size: 0.75em; color: #666;">Status: ${node.status || 'unknown'}</div>
+            </div>
+            <span class="node-status ${node.has_position ? 'has-position' : 'no-position'}">
+              ${node.has_position ? '📍' : '❌'}
+            </span>
+          </div>
+        `).join('');
+        
+        resultsDiv.style.display = 'block';
+        
+        // Auto-zoom to first result if only one match
+        if (matchingNodes.length === 1 && matchingNodes[0].has_position) {
+          setTimeout(() => {
+            map.setView([matchingNodes[0].latitude, matchingNodes[0].longitude], 14, {
+              animate: true,
+              duration: 0.8
+            });
+          }, 500);
+        }
+        
+      } catch (error) {
+        console.error('Search error:', error);
+        const resultsDiv = document.getElementById('searchResults');
+        resultsDiv.innerHTML = '<div style="padding: 12px; text-align: center; color: #f44336;">Søkefeil</div>';
+        resultsDiv.style.display = 'block';
+      }
+    }
+    
+    async function selectNode(nodeId, lat, lon) {
+      currentNodeId = nodeId;
+      
+      // Close search results
+      document.getElementById('searchResults').style.display = 'none';
+      document.getElementById('sidebarSearch').value = '';
+      
+      // Show node editor
+      document.getElementById('nodeEditor').style.display = 'block';
+      document.getElementById('nodeEditorTitle').textContent = `Node: ${nodeId}`;
+      
+      // Zoom to node and open popup if it has position
+      if (lat && lon) {
+        map.setView([lat, lon], 14, {
+          animate: true,
+          duration: 0.8
+        });
+        
+        // Find and open the popup for this node after zoom
+        setTimeout(() => {
+          nodesLayer.eachLayer(layer => {
+            if (layer.feature && layer.feature.properties.nodeId === nodeId) {
+              layer.openPopup();
+            }
+          });
+        }, 1000);
+      }
+      
+      // Load node data
+      await loadNodeData(nodeId);
+    }
+    
+    async function loadNodeData(nodeId) {
+      try {
+        // Load tags
+        const tagsResponse = await fetch(`${API_BASE_URL}/api/node/${nodeId}/tags`);
+        const tagsData = await tagsResponse.json();
+        
+        const tagList = document.getElementById('tagList');
+        if (tagsData.tags && tagsData.tags.length > 0) {
+          tagList.innerHTML = tagsData.tags.map(tag => `
+            <span class="tag-chip ${tag.type}">
+              ${tag.tag}
+              <span class="remove-tag" onclick="removeTag('${tag.tag}')">×</span>
+            </span>
+          `).join('');
+        } else {
+          tagList.innerHTML = '<div style="color: #999; font-size: 0.85em;">Ingen tags ennå</div>';
+        }
+        
+        // Find node in current data to get position info
+        const nodeFeature = nodesData.features.find(f => f.properties.nodeId === nodeId);
+        if (nodeFeature) {
+          const props = nodeFeature.properties;
+          const posInfo = document.getElementById('positionInfo');
+          const removeBtn = document.getElementById('removePositionBtn');
+          
+          if (props.positionSource === 'manual') {
+            posInfo.innerHTML = `
+              <div class="label">Manuell posisjon:</div>
+              <div class="coords">${nodeFeature.geometry.coordinates[1].toFixed(6)}, ${nodeFeature.geometry.coordinates[0].toFixed(6)}</div>
+              ${props.manualAddress ? `<div style="margin-top: 4px; color: #666;">${props.manualAddress}</div>` : ''}
+              <span class="source-badge manual">Manuelt satt</span>
+            `;
+            removeBtn.style.display = 'block';
+          } else if (nodeFeature.geometry.coordinates) {
+            posInfo.innerHTML = `
+              <div class="label">GPS-posisjon:</div>
+              <div class="coords">${nodeFeature.geometry.coordinates[1].toFixed(6)}, ${nodeFeature.geometry.coordinates[0].toFixed(6)}</div>
+              <span class="source-badge gps">Fra GPS</span>
+            `;
+            removeBtn.style.display = 'none';
+          } else {
+            posInfo.innerHTML = '<div style="color: #999;">Ingen posisjon</div>';
+            removeBtn.style.display = 'none';
+          }
+          
+          // Load notes
+          document.getElementById('notesTextarea').value = props.notes || '';
+        }
+      } catch (error) {
+        console.error('Error loading node data:', error);
+      }
+    }
+    
+    async function addTag() {
+      const tagInput = document.getElementById('newTagInput');
+      const tag = tagInput.value.trim();
+      const type = document.getElementById('tagTypeSelect').value;
+      
+      if (!tag) {
+        alert('Vennligst skriv inn en tag');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(currentNodeId)}/tags`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`
+          },
+          body: JSON.stringify({ tag, type })
+        });
+        
+        if (response.ok) {
+          tagInput.value = '';
+          await loadNodeData(currentNodeId);
+          await loadNodes(); // Reload map data to show new tags
+        } else {
+          alert('Feil ved lagring av tag');
+        }
+      } catch (error) {
+        console.error('Error adding tag:', error);
+        alert('Feil ved lagring av tag');
+      }
+    }
+    
+    async function removeTag(tag) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(currentNodeId)}/tags?tag=${encodeURIComponent(tag)}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${API_KEY}`
+          }
+        });
+        
+        if (response.ok) {
+          await loadNodeData(currentNodeId);
+          await loadNodes(); // Reload map data
+        } else {
+          alert('❌ Feil ved sletting av tag');
+        }
+      } catch (error) {
+        console.error('Error removing tag:', error);
+        alert('❌ Feil ved sletting av tag');
+      }
+    }
+    
+    function showPositionForm() {
+      document.getElementById('positionForm').style.display = 'block';
+      document.getElementById('positionButtons').style.display = 'none';
+    }
+    
+    function cancelManualPosition() {
+      document.getElementById('positionForm').style.display = 'none';
+      document.getElementById('positionButtons').style.display = 'flex';
+      // Clear inputs
+      document.getElementById('manualLat').value = '';
+      document.getElementById('manualLon').value = '';
+      document.getElementById('manualAlt').value = '';
+      document.getElementById('manualAddress').value = '';
+    }
+    
+    async function saveManualPosition() {
+      const lat = parseFloat(document.getElementById('manualLat').value);
+      const lon = parseFloat(document.getElementById('manualLon').value);
+      const alt = parseFloat(document.getElementById('manualAlt').value) || 0;
+      const address = document.getElementById('manualAddress').value.trim();
+      
+      if (isNaN(lat) || isNaN(lon)) {
+        alert('Vennligst fyll inn gyldige koordinater');
+        return;
+      }
+      
+      if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+        alert('Ugyldig latitude/longitude');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(currentNodeId)}/position`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`
+          },
+          body: JSON.stringify({ latitude: lat, longitude: lon, altitude: alt, address })
+        });
+        
+        if (response.ok) {
+          alert('Posisjon lagret!');
+          cancelManualPosition();
+          await loadNodeData(currentNodeId);
+          await loadNodes(); // Reload map to show new position
+        } else {
+          alert('Feil ved lagring av posisjon');
+        }
+      } catch (error) {
+        console.error('Error saving position:', error);
+        alert('Feil ved lagring av posisjon');
+      }
+    }
+    
+    async function removeManualPosition() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(currentNodeId)}/position`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${API_KEY}`
+          }
+        });
+        
+        if (response.ok) {
+          alert('Manuell posisjon fjernet');
+          await loadNodeData(currentNodeId);
+          await loadNodes(); // Reload map
+        } else {
+          alert('Feil ved fjerning av posisjon');
+        }
+      } catch (error) {
+        console.error('Error removing position:', error);
+        alert('Feil ved fjerning av posisjon');
+      }
+    }
+    
+    async function saveNotes() {
+      // Notes are stored in node_tags table or we can add a notes column
+      // For now, we'll show a success message
+      alert('Notater lagret! (Feature kommer snart)');
+    }
+    
+    async function updateStatistics() {
+      try {
+        // Use the allNodes array that's already loaded
+        if (!allNodes || allNodes.length === 0) {
+          console.log('No nodes data available for statistics yet');
+          return;
+        }
+        
+        const total = allNodes.length;
+        const withPos = allNodes.filter(f => 
+          f.geometry && f.geometry.coordinates && 
+          f.geometry.coordinates[0] && f.geometry.coordinates[1]
+        ).length;
+        const withoutPos = total - withPos;
+        
+        document.getElementById('totalNodes').textContent = total;
+        document.getElementById('nodesWithPosition').textContent = withPos;
+        document.getElementById('nodesWithoutPosition').textContent = withoutPos;
+      } catch (error) {
+        console.error('Error updating statistics:', error);
+      }
+    }
+    
+    // Statistics are now updated automatically when nodes are loaded in loadNodes()
+    
+    // ==================== POPUP EDIT FUNCTIONS ====================
+    
+    function togglePopupEdit(nodeId) {
+      const editSection = document.getElementById(`edit-section-${nodeId}`);
+      if (editSection.style.display === 'none') {
+        editSection.style.display = 'block';
+        pauseAutoRefresh(); // Pause when opening edit
+      } else {
+        editSection.style.display = 'none';
+        resumeAutoRefresh(); // Resume when closing edit
+      }
+    }
+    
+    function handleEditClick(nodeId) {
+      console.log('handleEditClick called for:', nodeId, 'isMobile:', isMobile());
+      
+      // Pause auto-refresh when editing starts
+      pauseAutoRefresh();
+      
+      // On mobile, open fullscreen modal
+      if (isMobile()) {
+        console.log('Opening mobile edit modal');
+        if (openMobileEdit(nodeId)) {
+          // Close the popup since we're opening the mobile modal
+          map.closePopup();
+          return;
+        }
+      } else {
+        // On desktop, use fullscreen modal
+        console.log('Opening desktop fullscreen modal');
+        if (openDesktopEdit(nodeId)) {
+          // Close the popup since we're opening the desktop modal
+          map.closePopup();
+          return;
+        }
+      }
+      
+      // Fallback to popup edit (should not happen)
+      console.log('Using desktop popup edit');
+      togglePopupEdit(nodeId);
+    }
+    
+    async function addTagFromPopup(nodeId) {
+      const tagInput = document.getElementById(`popup-tag-input-${nodeId}`);
+      const tagType = document.getElementById(`popup-tag-type-${nodeId}`).value;
+      const tag = tagInput.value.trim();
+      
+      if (!tag) {
+        alert('⚠️ Vennligst skriv inn en tag først');
+        return;
+      }
+      
+      try {
+        console.log('Adding tag:', tag, 'type:', tagType, 'to node:', nodeId);
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(nodeId)}/tags`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`
+          },
+          body: JSON.stringify({ tag, type: tagType })
+        });
+        
+        console.log('Response status:', response.status, response.statusText);
+        
+        if (response.ok) {
+          const result = await response.json();
+          console.log('Tag added successfully:', result);
+          tagInput.value = '';
+          alert(`✅ Tag "${tag}" lagt til!`);
+          // Reload data to update popup
+          await loadNodes();
+          // Re-open the popup with updated content
+          setTimeout(() => {
+            const marker = findMarkerByNodeId(nodeId);
+            if (marker) {
+              marker.openPopup();
+              // Re-open edit section
+              setTimeout(() => {
+                const editSection = document.getElementById(`edit-section-${nodeId}`);
+                if (editSection) {
+                  editSection.style.display = 'block';
+                }
+              }, 100);
+            }
+          }, 500);
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          console.error('Failed to add tag:', response.status, errorData);
+          alert(`❌ Feil ved lagring av tag: ${errorData.error || response.statusText}`);
+        }
+      } catch (error) {
+        console.error('Error adding tag:', error);
+        alert(`❌ Nettverksfeil: ${error.message}`);
+      }
+    }
+    
+    async function removeTagFromPopup(nodeId, tag) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(nodeId)}/tags?tag=${encodeURIComponent(tag)}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${API_KEY}`
+          }
+        });
+        
+        if (response.ok) {
+          await loadNodes();
+          // Re-open the popup with updated content, but keep edit section open
+          setTimeout(() => {
+            const marker = findMarkerByNodeId(nodeId);
+            if (marker) {
+              marker.openPopup();
+              // Ensure edit section stays open
+              setTimeout(() => {
+                const editSection = document.getElementById(`edit-section-${nodeId}`);
+                if (editSection) {
+                  editSection.style.display = 'block';
+                }
+              }, 200); // Increased timeout to ensure popup is fully loaded
+            }
+          }, 300); // Reduced timeout for faster response
+        } else {
+          alert('❌ Feil ved sletting av tag');
+        }
+      } catch (error) {
+        console.error('Error removing tag:', error);
+        alert('❌ Feil ved sletting av tag');
+      }
+    }
+    
+    async function savePositionFromPopup(nodeId) {
+      const latValue = document.getElementById(`popup-lat-${nodeId}`).value.trim();
+      const lonValue = document.getElementById(`popup-lon-${nodeId}`).value.trim();
+      const address = document.getElementById(`popup-addr-${nodeId}`).value.trim();
+      
+      // Sjekk at minst ett felt er fylt
+      if (!latValue && !lonValue && !address) {
+        alert('⚠️ Vennligst fyll ut minst ett felt (koordinater eller adresse)');
+        return;
+      }
+      
+      // Hvis koordinater er fylt, må begge være gyldige
+      const lat = latValue ? parseFloat(latValue) : null;
+      const lon = lonValue ? parseFloat(lonValue) : null;
+      
+      if ((latValue && isNaN(lat)) || (lonValue && isNaN(lon))) {
+        alert('⚠️ Ugyldig koordinat-format. Bruk desimaltall (f.eks. 69.6812)');
+        return;
+      }
+      
+      if ((lat !== null && lon === null) || (lat === null && lon !== null)) {
+        alert('⚠️ Hvis du bruker koordinater, må både latitude og longitude fylles ut');
+        return;
+      }
+      
+      if (lat !== null && (lat < -90 || lat > 90 || lon < -180 || lon > 180)) {
+        alert('⚠️ Ugyldig latitude/longitude (lat: -90 til 90, lon: -180 til 180)');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(nodeId)}/position`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`
+          },
+          body: JSON.stringify({ latitude: lat, longitude: lon, altitude: 0, address })
+        });
+        
+        if (response.ok) {
+          alert('✅ Posisjon lagret! Kartet oppdateres...');
+          // Clear form fields
+          document.getElementById(`popup-lat-${nodeId}`).value = '';
+          document.getElementById(`popup-lon-${nodeId}`).value = '';
+          document.getElementById(`popup-addr-${nodeId}`).value = '';
+          await loadNodes();
+          // Zoom to new position if coordinates were provided
+          setTimeout(() => {
+            if (lat !== null && lon !== null) {
+              map.setView([lat, lon], 14);
+            }
+          }, 500);
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          alert(`❌ Feil ved lagring av posisjon: ${errorData.error || response.statusText}`);
+        }
+      } catch (error) {
+        console.error('Error saving position:', error);
+        alert(`❌ Nettverksfeil: ${error.message}`);
+      }
+    }
+    
+    async function removePositionFromPopup(nodeId) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(nodeId)}/position`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${API_KEY}`
+          }
+        });
+        
+        if (response.ok) {
+          alert('Manuell posisjon fjernet');
+          await loadNodes();
+        } else {
+          alert('Feil ved fjerning av posisjon');
+        }
+      } catch (error) {
+        console.error('Error removing position:', error);
+        alert('Feil ved fjerning av posisjon');
+      }
+    }
+    
+    function findMarkerByNodeId(nodeId) {
+      let foundMarker = null;
+      nodesLayer.eachLayer(layer => {
+        if (layer.feature && layer.feature.properties.nodeId === nodeId) {
+          foundMarker = layer;
+        }
+      });
+      return foundMarker;
+    }
+    
+    // ==================== MOBILE TOUCH GESTURES ====================
+    
+    // Swipe to open/close sidebar on mobile
+    let touchStartX = 0;
+    let touchEndX = 0;
+    
+    function handleSwipe() {
+      const sidebar = document.getElementById('sidebar');
+      const swipeDistance = touchEndX - touchStartX;
+      const minSwipeDistance = 50;
+      
+      // Swipe from right edge to open
+      if (touchStartX > window.innerWidth - 50 && swipeDistance < -minSwipeDistance) {
+        sidebar.classList.add('open');
+      }
+      
+      // Swipe right to close
+      if (sidebar.classList.contains('open') && swipeDistance > minSwipeDistance) {
+        sidebar.classList.remove('open');
+      }
+    }
+    
+    document.addEventListener('touchstart', e => {
+      touchStartX = e.changedTouches[0].screenX;
+    });
+    
+    document.addEventListener('touchend', e => {
+      touchEndX = e.changedTouches[0].screenX;
+      handleSwipe();
+    });
+    
+    // Close sidebar when clicking outside on mobile
+    document.addEventListener('click', (e) => {
+      const sidebar = document.getElementById('sidebar');
+      const toggleBtn = document.querySelector('.sidebar-toggle');
+      
+      if (sidebar.classList.contains('open') && 
+          !sidebar.contains(e.target) && 
+          !toggleBtn.contains(e.target)) {
+        sidebar.classList.remove('open');
+      }
+    });
+    
+    // Prevent map interaction when sidebar is open on mobile
+    const sidebar = document.getElementById('sidebar');
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName === 'class') {
+          if (sidebar.classList.contains('open')) {
+            map.dragging.disable();
+            map.touchZoom.disable();
+            map.doubleClickZoom.disable();
+            map.scrollWheelZoom.disable();
+          } else {
+            map.dragging.enable();
+            map.touchZoom.enable();
+            map.doubleClickZoom.enable();
+            map.scrollWheelZoom.enable();
+          }
+        }
+      });
+    });
+    
+    observer.observe(sidebar, { attributes: true });
+    
+    // Add viewport meta tag if not present (for proper mobile scaling)
+    if (!document.querySelector('meta[name="viewport"]')) {
+      const viewport = document.createElement('meta');
+      viewport.name = 'viewport';
+      viewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+      document.head.appendChild(viewport);
+    }
+    
+    // ==================== MOBILE EDIT MODAL FUNCTIONS ====================
+    let currentMobileNodeId = null;
+    
+    function isMobile() {
+      return window.innerWidth <= 768;
+    }
+    
+    function openMobileEdit(nodeId) {
+      console.log('openMobileEdit called for:', nodeId, 'isMobile check:', isMobile());
+      if (!isMobile()) return false;
+      
+      currentMobileNodeId = nodeId;
+      const modal = document.getElementById('mobileEditModal');
+      console.log('Mobile modal element:', modal);
+      
+      if (!modal) {
+        console.error('Mobile modal not found!');
+        return false;
+      }
+      
+      const title = document.getElementById('mobileEditTitle');
+      
+      // Find node data
+      const node = allNodes.find(f => f.properties.nodeId === nodeId);
+      const nodeName = node ? (node.properties.longName || nodeId) : nodeId;
+      
+      title.textContent = `Rediger: ${nodeName}`;
+      modal.classList.add('active');
+      
+      // Pause auto-refresh while editing
+      pauseAutoRefresh();
+      
+      // Start live updates for this node
+      startLiveNodeUpdate(nodeId);
+      
+      // Load data into mobile modal
+      loadMobileEditData(nodeId);
+      
+      // Prevent background scrolling
+      document.body.style.overflow = 'hidden';
+      
+      return true;
+    }
+    
+    function closeMobileEdit() {
+      const modal = document.getElementById('mobileEditModal');
+      modal.classList.remove('active');
+      currentMobileNodeId = null;
+      
+      // Resume auto-refresh when editing is done
+      resumeAutoRefresh();
+      
+      // Stop live updates
+      stopLiveNodeUpdate();
+      
+      // Re-enable background scrolling
+      document.body.style.overflow = '';
+    }
+    
+    async function loadMobileEditData(nodeId) {
+      console.log('Loading mobile edit data for node:', nodeId);
+      
+      try {
+        // Load tags
+        console.log('Fetching tags for node:', nodeId);
+        const tagsResponse = await fetch(`${API_BASE_URL}/api/node/${nodeId}/tags`, {
+          headers: { 'Authorization': `Bearer ${API_KEY}` }
+        });
+        const tagsData = await tagsResponse.json();
+        
+        console.log('Tags data received:', tagsData);
+        
+        const tagList = document.getElementById('mobileTagList');
+        if (tagsData.tags && tagsData.tags.length > 0) {
+          console.log('Rendering', tagsData.tags.length, 'tags');
+          tagList.innerHTML = tagsData.tags.map(tag => `
+            <span class="mobile-tag-chip ${tag.type}">
+              ${tag.tag}
+              <span class="remove-tag" onclick="removeMobileTag('${tag.tag}')">×</span>
+            </span>
+          `).join('');
+        } else {
+          console.log('No tags found, showing empty state');
+          tagList.innerHTML = '<span style="color:#999; font-size:0.9em;">Ingen tags</span>';
+        }
+        
+        // Load position and notes from node data
+        const node = allNodes.find(f => f.properties.nodeId === nodeId);
+        if (node) {
+          const props = node.properties;
+          const posInfo = document.getElementById('mobilePositionInfo');
+          const removeBtn = document.getElementById('mobileRemovePositionBtn');
+          
+          if (props.positionSource === 'manual') {
+            posInfo.innerHTML = `
+              <div style="font-weight: 600; margin-bottom: 4px;">Manuell posisjon:</div>
+              <div style="font-family: monospace; color: #333;">${props.latitude.toFixed(6)}, ${props.longitude.toFixed(6)}</div>
+              ${props.altitude ? `<div style="color: #666;">Høyde: ${props.altitude}m</div>` : ''}
+              ${props.address ? `<div style="color: #666;">${props.address}</div>` : ''}
+            `;
+            removeBtn.style.display = 'block';
+          } else if (props.positionSource === 'gps') {
+            posInfo.innerHTML = `
+              <div style="font-weight: 600; margin-bottom: 4px;">GPS posisjon:</div>
+              <div style="font-family: monospace; color: #333;">${props.latitude.toFixed(6)}, ${props.longitude.toFixed(6)}</div>
+              ${props.altitude ? `<div style="color: #666;">Høyde: ${props.altitude}m</div>` : ''}
+              <div style="color: #4CAF50; font-size: 0.85em; margin-top: 4px;">📡 Fra GPS</div>
+            `;
+            removeBtn.style.display = 'none';
+          } else {
+            posInfo.innerHTML = '<div style="color: #999;">Ingen posisjon</div>';
+            removeBtn.style.display = 'none';
+          }
+          
+          // Load notes
+          document.getElementById('mobileNotesTextarea').value = props.notes || '';
+          
+          // Load initial telemetry data
+          console.log('Loading mobile telemetry data for:', props.nodeId, props);
+          updateMobileTelemetryData(props);
+        }
+      } catch (error) {
+        console.error('Error loading mobile edit data:', error);
+      }
+    }
+    
+    async function addMobileTag() {
+      const tagInput = document.getElementById('mobileTagInput');
+      const tagType = document.getElementById('mobileTagType').value;
+      const tag = tagInput.value.trim();
+      
+      if (!tag) {
+        alert('⚠️ Vennligst skriv inn en tag først');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(currentMobileNodeId)}/tags`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`
+          },
+          body: JSON.stringify({ tag, type: tagType })
+        });
+        
+        if (response.ok) {
+          tagInput.value = '';
+          await loadNodes(); // Reload map data
+          await loadMobileEditData(currentMobileNodeId); // Reload modal data
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          alert(`❌ Feil ved lagring av tag: ${errorData.error || response.statusText}`);
+        }
+      } catch (error) {
+        console.error('Error adding mobile tag:', error);
+        alert(`❌ Nettverksfeil: ${error.message}`);
+      }
+    }
+    
+    async function removeMobileTag(tag) {
+      console.log('Attempting to remove mobile tag:', tag, 'from node:', currentMobileNodeId);
+      
+      try {
+        console.log('Sending DELETE request for tag:', tag);
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(currentMobileNodeId)}/tags?tag=${encodeURIComponent(tag)}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${API_KEY}` }
+        });
+        
+        console.log('DELETE response status:', response.status, response.statusText);
+        
+        if (response.ok) {
+          console.log('Tag deleted successfully, reloading data...');
+          await loadNodes(); // Reload map data
+          await loadMobileEditData(currentMobileNodeId); // Reload modal data
+          console.log('Data reloaded after tag deletion');
+        } else {
+          const errorData = await response.text();
+          console.error('Failed to delete tag:', response.status, errorData);
+          alert('❌ Feil ved sletting av tag');
+        }
+      } catch (error) {
+        console.error('Error removing mobile tag:', error);
+        alert('❌ Feil ved sletting av tag');
+      }
+    }
+    
+    function showMobilePositionForm() {
+      document.getElementById('mobilePositionForm').style.display = 'block';
+      document.getElementById('mobilePositionButtons').style.display = 'none';
+      document.getElementById('mobilePositionSaveButtons').style.display = 'block';
+    }
+    
+    function hideMobilePositionForm() {
+      document.getElementById('mobilePositionForm').style.display = 'none';
+      document.getElementById('mobilePositionButtons').style.display = 'block';
+      document.getElementById('mobilePositionSaveButtons').style.display = 'none';
+      // Clear inputs
+      document.getElementById('mobileLat').value = '';
+      document.getElementById('mobileLon').value = '';
+      document.getElementById('mobileAlt').value = '';
+      document.getElementById('mobileAddress').value = '';
+    }
+    
+    async function saveMobilePosition() {
+      const lat = parseFloat(document.getElementById('mobileLat').value);
+      const lon = parseFloat(document.getElementById('mobileLon').value);
+      const alt = document.getElementById('mobileAlt').value ? parseInt(document.getElementById('mobileAlt').value) : null;
+      const address = document.getElementById('mobileAddress').value.trim() || null;
+      
+      if (isNaN(lat) || isNaN(lon)) {
+        alert('⚠️ Vennligst skriv inn gyldig latitude og longitude');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(currentMobileNodeId)}/position`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`
+          },
+          body: JSON.stringify({ latitude: lat, longitude: lon, altitude: alt, address })
+        });
+        
+        if (response.ok) {
+          alert('✅ Posisjon lagret!');
+          hideMobilePositionForm();
+          await loadNodes(); // Reload map data
+          await loadMobileEditData(currentMobileNodeId); // Reload modal data
+        } else {
+          alert('❌ Feil ved lagring av posisjon');
+        }
+      } catch (error) {
+        console.error('Error saving mobile position:', error);
+        alert('❌ Feil ved lagring av posisjon');
+      }
+    }
+    
+    async function removeMobilePosition() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(currentMobileNodeId)}/position`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${API_KEY}` }
+        });
+        
+        if (response.ok) {
+          alert('✅ Manuell posisjon fjernet');
+          await loadNodes(); // Reload map data
+          await loadMobileEditData(currentMobileNodeId); // Reload modal data
+        } else {
+          alert('❌ Feil ved fjerning av posisjon');
+        }
+      } catch (error) {
+        console.error('Error removing mobile position:', error);
+        alert('❌ Feil ved fjerning av posisjon');
+      }
+    }
+    
+    async function saveMobileNotes() {
+      const notes = document.getElementById('mobileNotesTextarea').value.trim();
+      
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(currentMobileNodeId)}/notes`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`
+          },
+          body: JSON.stringify({ notes })
+        });
+        
+        if (response.ok) {
+          alert('✅ Notater lagret!');
+          await loadNodes(); // Reload map data
+        } else {
+          alert('❌ Feil ved lagring av notater');
+        }
+      } catch (error) {
+        console.error('Error saving mobile notes:', error);
+        alert('❌ Feil ved lagring av notater');
+      }
+    }
+    
+    // ==================== DESKTOP FULLSCREEN EDIT MODAL FUNCTIONS ====================
+    let currentDesktopNodeId = null;
+    
+    function openDesktopEdit(nodeId) {
+      console.log('openDesktopEdit called for:', nodeId);
+      
+      currentDesktopNodeId = nodeId;
+      const modal = document.getElementById('desktopEditModal');
+      console.log('Desktop modal element:', modal);
+      
+      if (!modal) {
+        console.error('Desktop modal not found!');
+        return false;
+      }
+      
+      const title = document.getElementById('desktopEditTitle');
+      
+      // Find node data
+      const node = allNodes.find(f => f.properties.nodeId === nodeId);
+      const nodeName = node ? (node.properties.longName || nodeId) : nodeId;
+      
+      title.textContent = `Rediger: ${nodeName}`;
+      modal.classList.add('active');
+      
+      // Pause auto-refresh while editing
+      pauseAutoRefresh();
+      
+      // Start live updates for this node
+      startLiveNodeUpdate(nodeId);
+      
+      // Load data into desktop modal
+      loadDesktopEditData(nodeId);
+      
+      return true;
+    }
+    
+    function closeDesktopEdit() {
+      const modal = document.getElementById('desktopEditModal');
+      modal.classList.remove('active');
+      currentDesktopNodeId = null;
+      
+      // Resume auto-refresh when editing is done
+      resumeAutoRefresh();
+      
+      // Stop live updates
+      stopLiveNodeUpdate();
+    }
+    
+    function getActiveDesktopNodeId() {
+      return currentDesktopNodeId;
+    }
+    
+    async function loadDesktopEditData(nodeId) {
+      console.log('Loading desktop edit data for node:', nodeId);
+      
+      try {
+        // Load tags
+        const tagsResponse = await fetch(`${API_BASE_URL}/api/node/${nodeId}/tags`, {
+          headers: { 'Authorization': `Bearer ${API_KEY}` }
+        });
+        const tagsData = await tagsResponse.json();
+        
+        const tagList = document.getElementById('desktopTagList');
+        if (tagsData.tags && tagsData.tags.length > 0) {
+          tagList.innerHTML = tagsData.tags.map(tag => `
+            <span class="mobile-tag-chip ${tag.type}">
+              ${tag.tag}
+              <span class="remove-tag" onclick="removeDesktopTag('${tag.tag}')">×</span>
+            </span>
+          `).join('');
+        } else {
+          tagList.innerHTML = '<span style="color:#999; font-size:0.9em;">Ingen tags</span>';
+        }
+        
+        // Load position and notes from node data
+        const node = allNodes.find(f => f.properties.nodeId === nodeId);
+        if (node) {
+          const props = node.properties;
+          const posInfo = document.getElementById('desktopPositionInfo');
+          const removeBtn = document.getElementById('desktopRemovePositionBtn');
+          
+          if (props.positionSource === 'manual') {
+            posInfo.innerHTML = `
+              <div style="font-weight: 600; margin-bottom: 4px;">Manuell posisjon:</div>
+              <div style="font-family: monospace; color: #333;">${props.latitude.toFixed(6)}, ${props.longitude.toFixed(6)}</div>
+              ${props.altitude ? `<div style="color: #666;">Høyde: ${props.altitude}m</div>` : ''}
+              ${props.address ? `<div style="color: #666;">${props.address}</div>` : ''}
+            `;
+            removeBtn.style.display = 'block';
+          } else if (props.positionSource === 'gps') {
+            posInfo.innerHTML = `
+              <div style="font-weight: 600; margin-bottom: 4px;">GPS posisjon:</div>
+              <div style="font-family: monospace; color: #333;">${props.latitude.toFixed(6)}, ${props.longitude.toFixed(6)}</div>
+              ${props.altitude ? `<div style="color: #666;">Høyde: ${props.altitude}m</div>` : ''}
+              <div style="color: #4CAF50; font-size: 0.85em; margin-top: 4px;">📡 Fra GPS</div>
+            `;
+            removeBtn.style.display = 'none';
+          } else {
+            posInfo.innerHTML = '<div style="color: #999;">Ingen posisjon</div>';
+            removeBtn.style.display = 'none';
+          }
+          
+          // Load notes
+          document.getElementById('desktopNotesTextarea').value = props.notes || '';
+          
+          // Load initial telemetry data
+          updateDesktopTelemetryData(props);
+        }
+      } catch (error) {
+        console.error('Error loading desktop edit data:', error);
+      }
+    }
+    
+    function updateDesktopTelemetryData(props) {
+      const desktopFields = [
+        // Temperature & Environment
+        ['desktop-temperature', props.temperature ? `${props.temperature.toFixed(1)}°C` : 'N/A'],
+        ['desktop-humidity', props.humidity ? `${props.humidity.toFixed(1)}%` : 'N/A'],
+        ['desktop-pressure', props.pressure ? `${props.pressure.toFixed(1)} hPa` : 'N/A'],
+        ['desktop-gas_resistance', props.gas_resistance ? `${props.gas_resistance.toFixed(0)} Ω` : 'N/A'],
+        
+        // Power & Battery
+        ['desktop-battery', props.batteryLevel ? `${props.batteryLevel}%` : 'N/A'],
+        ['desktop-voltage', props.voltage ? `${props.voltage.toFixed(2)}V` : 'N/A'],
+        ['desktop-current', props.current ? `${props.current.toFixed(0)}mA` : 'N/A'],
+        ['desktop-power', props.power ? `${props.power.toFixed(1)}W` : 'N/A'],
+        
+        // Air Quality
+        ['desktop-pm10_standard', props.pm10_standard ? `${props.pm10_standard} μg/m³` : 'N/A'],
+        ['desktop-pm25_standard', props.pm25_standard ? `${props.pm25_standard} μg/m³` : 'N/A'],
+        ['desktop-pm100_standard', props.pm100_standard ? `${props.pm100_standard} μg/m³` : 'N/A'],
+        ['desktop-iaq', props.iaq ? `${props.iaq}` : 'N/A'],
+        
+        // Weather & Outdoor
+        ['desktop-wind_direction', props.wind_direction ? `${props.wind_direction}°` : 'N/A'],
+        ['desktop-wind_speed', props.wind_speed ? `${props.wind_speed.toFixed(1)} m/s` : 'N/A'],
+        ['desktop-rain_hourly', props.rain_hourly ? `${props.rain_hourly.toFixed(1)} mm` : 'N/A'],
+        ['desktop-uv_index', props.uv_index ? `${props.uv_index}` : 'N/A'],
+        
+        // Light & Sensors
+        ['desktop-lux', props.lux ? `${props.lux.toFixed(0)} lx` : 'N/A'],
+        ['desktop-pir', props.pir ? (props.pir ? 'Aktivert' : 'Ikke aktivert') : 'N/A'],
+        ['desktop-ambient_light', props.ambient_light ? `${props.ambient_light.toFixed(0)} lx` : 'N/A'],
+        ['desktop-solar_irradiance', props.solar_irradiance ? `${props.solar_irradiance.toFixed(1)} W/m²` : 'N/A'],
+        
+        // Network & Connectivity
+        ['desktop-snr', props.snr ? `${props.snr} dB` : 'N/A'],
+        ['desktop-altitude', props.altitude ? `${Math.round(props.altitude)}m` : 'N/A'],
+        ['desktop-channel_utilization', props.channelUtil ? `${props.channelUtil.toFixed(1)}%` : 'N/A'],
+        ['desktop-air_util_tx', props.airUtilTx ? `${props.airUtilTx.toFixed(1)}%` : 'N/A'],
+        
+        ['desktop-lastheard', props.lastHeardNorwegian || 'N/A'],
+        ['desktop-ago', props.lastHeardAgoSec ? `(${formatDuration(props.lastHeardAgoSec)})` : '']
+      ];
+      
+      desktopFields.forEach(([fieldId, value]) => {
+        const element = document.getElementById(fieldId);
+        if (element && element.textContent !== value) {
+          element.textContent = value;
+          // Flash effect for updated values
+          element.style.backgroundColor = '#e8f5e8';
+          setTimeout(() => {
+            if (element) element.style.backgroundColor = '';
+          }, 1000);
+        }
+      });
+    }
+    
+    // Desktop tag functions (simplified - reuse mobile logic)
+    async function addDesktopTag() {
+      const tagInput = document.getElementById('desktopNewTag');
+      const tagType = document.getElementById('desktopTagType').value;
+      const tag = tagInput.value.trim();
+      
+      if (!tag) return;
+      
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(currentDesktopNodeId)}/tags`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`
+          },
+          body: JSON.stringify({ tag, type: tagType })
+        });
+        
+        if (response.ok) {
+          tagInput.value = '';
+          loadDesktopEditData(currentDesktopNodeId); // Reload tags
+          loadNodes(); // Reload map
+        } else {
+          alert('Feil ved lagring av tag');
+        }
+      } catch (error) {
+        console.error('Error adding desktop tag:', error);
+        alert('Feil ved lagring av tag');
+      }
+    }
+    
+    async function removeDesktopTag(tag) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(currentDesktopNodeId)}/tags`, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`
+          },
+          body: JSON.stringify({ tag })
+        });
+        
+        if (response.ok) {
+          loadDesktopEditData(currentDesktopNodeId); // Reload tags
+          loadNodes(); // Reload map
+        } else {
+          alert('Feil ved sletting av tag');
+        }
+      } catch (error) {
+        console.error('Error removing desktop tag:', error);
+        alert('Feil ved sletting av tag');
+      }
+    }
+    
+    async function saveDesktopPosition() {
+      const lat = parseFloat(document.getElementById('desktop-lat').value);
+      const lon = parseFloat(document.getElementById('desktop-lon').value);
+      const address = document.getElementById('desktop-addr').value.trim() || null;
+      
+      if (isNaN(lat) || isNaN(lon)) {
+        alert('⚠️ Vennligst skriv inn gyldig latitude og longitude');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(currentDesktopNodeId)}/position`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`
+          },
+          body: JSON.stringify({ latitude: lat, longitude: lon, address })
+        });
+        
+        if (response.ok) {
+          alert('✅ Posisjon lagret!');
+          loadDesktopEditData(currentDesktopNodeId);
+          loadNodes();
+        } else {
+          alert('❌ Feil ved lagring av posisjon');
+        }
+      } catch (error) {
+        console.error('Error saving desktop position:', error);
+        alert('❌ Feil ved lagring av posisjon');
+      }
+    }
+    
+    async function removeDesktopPosition() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(currentDesktopNodeId)}/position`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${API_KEY}` }
+        });
+        
+        if (response.ok) {
+          alert('✅ Posisjon fjernet!');
+          loadDesktopEditData(currentDesktopNodeId);
+          loadNodes();
+        } else {
+          alert('❌ Feil ved fjerning av posisjon');
+        }
+      } catch (error) {
+        console.error('Error removing desktop position:', error);
+        alert('❌ Feil ved fjerning av posisjon');
+      }
+    }
+    
+    async function saveDesktopNotes() {
+      const notes = document.getElementById('desktopNotesTextarea').value.trim();
+      
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(currentDesktopNodeId)}/notes`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`
+          },
+          body: JSON.stringify({ notes })
+        });
+        
+        if (response.ok) {
+          alert('✅ Notater lagret!');
+          loadNodes();
+        } else {
+          alert('❌ Feil ved lagring av notater');
+        }
+      } catch (error) {
+        console.error('Error saving desktop notes:', error);
+        alert('❌ Feil ved lagring av notater');
+      }
+    }
+
+    // ==================== ENHANCED SEARCH FUNCTIONALITY ====================
+    
+    // Enhanced search function for bottom search bar
+    function performEnhancedSearch() {
+      const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
+      const searchMode = document.getElementById('searchMode').value;
+      
+      if (!searchTerm) {
+        renderNodes();
+        return;
+      }
+      
+      let filteredNodes = [];
+      
+      if (searchMode === 'all' || searchMode === 'nodes') {
+        // Search in node names and IDs
+        const nodeResults = allNodes.filter(feature => {
+          const props = feature.properties;
+          const longName = (props.longName || '').toLowerCase();
+          const nodeId = props.nodeId.toLowerCase();
+          
+          return longName.includes(searchTerm) || nodeId.includes(searchTerm);
+        });
+        filteredNodes = filteredNodes.concat(nodeResults);
+      }
+      
+      if (searchMode === 'all' || searchMode === 'tags') {
+        // Search in tags
+        const tagResults = allNodes.filter(feature => {
+          const props = feature.properties;
+          if (props.tags && Array.isArray(props.tags)) {
+            return props.tags.some(tag => tag.tag.toLowerCase().includes(searchTerm));
+          }
+          return false;
+        });
+        
+        // Remove duplicates
+        tagResults.forEach(result => {
+          if (!filteredNodes.find(node => node.properties.nodeId === result.properties.nodeId)) {
+            filteredNodes.push(result);
+          }
+        });
+      }
+      
+      // Render filtered results
+      renderFilteredNodes(filteredNodes);
+    }
+    
+    // Apply enhanced search on input
+    document.getElementById('searchInput').addEventListener('input', performEnhancedSearch);
+    document.getElementById('searchMode').addEventListener('change', performEnhancedSearch);
+    
+    // ==================== ADDRESS GEOCODING ==================== 
+    let addressSearchTimeout = null;
+    let selectedSuggestionIndex = -1;
+    let currentSuggestions = [];
+    
+    async function searchAddresses(query) {
+      if (query.length < 3) return [];
+      
+      try {
+        // Using Nominatim (OpenStreetMap) API for geocoding
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&q=${encodeURIComponent(query)}&countrycodes=no,se,fi,dk`, {
+          headers: {
+            'User-Agent': 'MeshtasticNodeMap/1.0'
+          }
+        });
+        
+        if (!response.ok) return [];
+        
+        const results = await response.json();
+        return results.map(result => ({
+          display_name: result.display_name,
+          lat: parseFloat(result.lat),
+          lon: parseFloat(result.lon),
+          type: result.type,
+          importance: result.importance || 0
+        }));
+      } catch (error) {
+        console.error('Geocoding error:', error);
+        return [];
+      }
+    }
+    
+    function handleAddressInput(input, nodeId, type) {
+      const query = input.value.trim();
+      const suggestionsId = `${type}-addr-suggestions-${nodeId}`;
+      const suggestionsDiv = document.getElementById(suggestionsId);
+      
+      // Clear previous timeout
+      if (addressSearchTimeout) {
+        clearTimeout(addressSearchTimeout);
+      }
+      
+      if (query.length < 3) {
+        suggestionsDiv.style.display = 'none';
+        return;
+      }
+      
+      // Show loading
+      suggestionsDiv.innerHTML = '<div class="address-loading">Søker...</div>';
+      suggestionsDiv.style.display = 'block';
+      
+      // Debounce search
+      addressSearchTimeout = setTimeout(async () => {
+        const suggestions = await searchAddresses(query);
+        displayAddressSuggestions(suggestions, nodeId, type);
+      }, 300);
+    }
+    
+    function displayAddressSuggestions(suggestions, nodeId, type) {
+      const suggestionsId = `${type}-addr-suggestions-${nodeId}`;
+      const suggestionsDiv = document.getElementById(suggestionsId);
+      
+      currentSuggestions = suggestions;
+      selectedSuggestionIndex = -1;
+      
+      if (suggestions.length === 0) {
+        suggestionsDiv.innerHTML = '<div class="address-loading">Ingen resultater</div>';
+        return;
+      }
+      
+      const html = suggestions.map((suggestion, index) => {
+        const parts = suggestion.display_name.split(',');
+        const mainText = parts[0];
+        const secondaryText = parts.slice(1).join(',').trim();
+        
+        return `
+          <div class="address-suggestion" data-index="${index}" onclick="selectAddressSuggestion(${index}, '${nodeId}', '${type}')">
+            <div class="main-text">${mainText}</div>
+            <div class="secondary-text">${secondaryText}</div>
+          </div>
+        `;
+      }).join('');
+      
+      suggestionsDiv.innerHTML = html;
+      suggestionsDiv.style.display = 'block';
+    }
+    
+    function selectAddressSuggestion(index, nodeId, type) {
+      if (index < 0 || index >= currentSuggestions.length) return;
+      
+      const suggestion = currentSuggestions[index];
+      const addressInput = document.getElementById(type === 'mobile' ? 'mobileAddress' : `popup-addr-${nodeId}`);
+      const latInput = document.getElementById(type === 'mobile' ? 'mobileLat' : `popup-lat-${nodeId}`);
+      const lonInput = document.getElementById(type === 'mobile' ? 'mobileLon' : `popup-lon-${nodeId}`);
+      
+      // Fill address field
+      addressInput.value = suggestion.display_name;
+      
+      // Fill coordinate fields
+      if (latInput) latInput.value = suggestion.lat.toFixed(6);
+      if (lonInput) lonInput.value = suggestion.lon.toFixed(6);
+      
+      // Hide suggestions
+      const suggestionsId = `${type}-addr-suggestions-${nodeId}`;
+      const suggestionsDiv = document.getElementById(suggestionsId);
+      suggestionsDiv.style.display = 'none';
+      
+      console.log('Selected address:', suggestion.display_name, 'at', suggestion.lat, suggestion.lon);
+    }
+    
+    function handleAddressKeydown(event, nodeId, type) {
+      const suggestionsId = `${type}-addr-suggestions-${nodeId}`;
+      const suggestionsDiv = document.getElementById(suggestionsId);
+      
+      if (suggestionsDiv.style.display === 'none') return;
+      
+      switch (event.key) {
+        case 'ArrowDown':
+          event.preventDefault();
+          selectedSuggestionIndex = Math.min(selectedSuggestionIndex + 1, currentSuggestions.length - 1);
+          updateSuggestionSelection(nodeId, type);
+          break;
+          
+        case 'ArrowUp':
+          event.preventDefault();
+          selectedSuggestionIndex = Math.max(selectedSuggestionIndex - 1, -1);
+          updateSuggestionSelection(nodeId, type);
+          break;
+          
+        case 'Enter':
+          event.preventDefault();
+          if (selectedSuggestionIndex >= 0) {
+            selectAddressSuggestion(selectedSuggestionIndex, nodeId, type);
+          }
+          break;
+          
+        case 'Escape':
+          suggestionsDiv.style.display = 'none';
+          selectedSuggestionIndex = -1;
+          break;
+      }
+    }
+    
+    function updateSuggestionSelection(nodeId, type) {
+      const suggestionsId = `${type}-addr-suggestions-${nodeId}`;
+      const suggestionsDiv = document.getElementById(suggestionsId);
+      const suggestions = suggestionsDiv.querySelectorAll('.address-suggestion');
+      
+      suggestions.forEach((suggestion, index) => {
+        suggestion.classList.toggle('selected', index === selectedSuggestionIndex);
+      });
+    }
+    
+    function showAddressSuggestions(nodeId, type) {
+      // Show suggestions if there's content
+      const addressInput = document.getElementById(type === 'mobile' ? 'mobileAddress' : `popup-addr-${nodeId}`);
+      if (addressInput.value.trim().length >= 3) {
+        const suggestionsId = `${type}-addr-suggestions-${nodeId}`;
+        const suggestionsDiv = document.getElementById(suggestionsId);
+        if (suggestionsDiv.innerHTML.trim()) {
+          suggestionsDiv.style.display = 'block';
+        }
+      }
+    }
+    
+    function hideAddressSuggestions(nodeId, type) {
+      // Delay hiding to allow clicks on suggestions
+      setTimeout(() => {
+        const suggestionsId = `${type}-addr-suggestions-${nodeId}`;
+        const suggestionsDiv = document.getElementById(suggestionsId);
+        suggestionsDiv.style.display = 'none';
+      }, 200);
+    }
+    
+    // Create a node marker with all standard styling and functionality
+    function createNodeMarker(lat, lon, props) {
+      const isFav = favorites.has(props.nodeId);
+      
+      // Determine color based on status
+      let color = '#999999';  // Default grey for unknown/offline
+      if (isFav) {
+        color = '#3388ff';  // Blue for favorites
+      } else if (props.status === 'online') {
+        color = '#4CAF50';  // Green for online
+      } else if (props.status === 'recent') {
+        color = '#FFA726';  // Orange/yellow for recent
+      } else {
+        color = '#999999';  // Grey for offline/unknown
+      }
+      
+      // Determine if local node (USB/WiFi) or global (MQTT)
+      const isLocal = props.source && (props.source.includes('USB') || props.source.includes('WiFi'));
+      
+      const marker = L.circleMarker([lat, lon], {
+        radius: isFav ? 8 : (isLocal ? 7 : 6),
+        fillColor: color,
+        color: isLocal ? '#000' : '#fff',  // Black ring for local, white for MQTT
+        weight: isLocal ? 2.5 : 1.5,
+        opacity: 1,
+        fillOpacity: isLocal ? 0.9 : 0.7
+      });
+      
+      // Add permanent label
+      const labelText = props.longName || props.shortName || props.nodeId.substring(1, 5);
+      let labelClass = 'node-label';
+      if (isFav) labelClass += ' favorite';
+      else if (props.status === 'online') labelClass += ' online';
+      else if (props.status === 'recent') labelClass += ' recent';
+      else labelClass += ' offline';
+      
+      const label = L.marker([lat, lon], {
+        icon: L.divIcon({
+          className: labelClass,
+          html: labelText,
+          iconSize: null,
+          iconAnchor: [-8, 18]
+        })
+      });
+      
+      // Only show labels at zoom level 10+
+      const currentZoom = map.getZoom();
+      if (currentZoom >= 10) {
+        label.addTo(nodesLayer);
+      }
+      
+      // Store reference to marker in label for click handling
+      label._nodeMarker = marker;
+      
+      // Make label clickable
+      label.on('click', function() {
+        map.setView([lat, lon], Math.max(map.getZoom(), 13), {
+          animate: true,
+          duration: 0.5
+        });
+        setTimeout(() => {
+          marker.openPopup();
+        }, 200);
+      });
+      
+      // Update label visibility on zoom
+      marker._labelMarker = label;
+      
+      // Add popup
+      const popupProps = {...props, isFavorite: isFav};
+      marker.bindPopup(createPopupContent(popupProps), { maxWidth: 300 });
+      
+      // Add click event to zoom to node when popup opens
+      marker.on('popupopen', function() {
+        setTimeout(() => {
+          map.setView([lat, lon], Math.max(map.getZoom(), 13), {
+            animate: true,
+            duration: 0.5
+          });
+        }, 100);
+      });
+      
+      return marker;
+    }
+    
+    // Update renderNodes to handle search mode
+    function renderFilteredNodes(filteredNodes) {
+      nodesLayer.clearLayers();
+      
+      filteredNodes.forEach(feature => {
+        if (feature.geometry && feature.geometry.coordinates) {
+          const lat = feature.geometry.coordinates[1];
+          const lon = feature.geometry.coordinates[0];
+          
+          const props = feature.properties;
+          const isFav = favorites.has(props.nodeId);
+          props.isFavorite = isFav;
+          
+          // Create marker
+          const marker = createNodeMarker(lat, lon, props);
+          marker.addTo(nodesLayer);
+        }
+      });
+      
+      updateStatistics();
+      updateFavoritesBar();
+      
+      // Auto-zoom to show filtered results
+      if (filteredNodes.length > 0 && nodesLayer.getLayers().length > 0) {
+        const bounds = nodesLayer.getBounds();
+        if (bounds.isValid()) {
+          map.fitBounds(bounds, { padding: [50, 50] });
+        }
+      }
+    }
   </script>
 </body>
 </html>

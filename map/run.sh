@@ -33,9 +33,6 @@ python /app/mqtt_collector_pg.py &
 echo "Starting dynamic device manager (USB + WiFi auto-discovery)..."
 python /app/device_manager.py &
 
-echo "Starting node API (HTTP endpoint for remote nodes)..."
-python /app/node_api.py &
-
 echo "Waiting 5 seconds for initial data..."
 sleep 5
 
@@ -67,5 +64,5 @@ echo "Starting nightly database backup task (runs at 02:00)..."
   done
 ) &
 
-echo "Starting web server on port 8080..."
-python -m http.server 8080 --directory "$DATA_DIR"
+echo "Starting combined web and API server on port 8080..."
+python /app/combined_server.py
