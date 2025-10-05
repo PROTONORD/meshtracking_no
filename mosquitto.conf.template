@@ -1,0 +1,25 @@
+# Mosquitto Configuration for Meshtracking All-in-One
+# This config goes to /etc/mosquitto/conf.d/default.conf
+
+# Basic listener
+listener 1883 0.0.0.0
+
+# Authentication
+password_file /etc/mosquitto/passwd
+allow_anonymous false
+
+# Basic logging (to stdout for supervisor)
+log_dest stdout
+log_type error
+log_type warning
+log_type notice
+
+# Connection limits
+max_connections 100
+max_inflight_messages 20
+max_queued_messages 100
+
+# Message size limits
+max_packet_size 65536
+
+keepalive_interval 60

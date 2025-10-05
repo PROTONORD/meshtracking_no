@@ -1,0 +1,19 @@
+[Unit]
+Description=Meshtastic USB Collector for Heltec V3
+After=network.target
+
+[Service]
+Type=simple
+User=kau005
+Group=dialout
+Environment="SERIAL_PORT=/dev/ttyUSB0"
+Environment="DB_PATH=/home/kau005/meshtastic-data/nodes.db"
+Environment="PYTHONPATH=/home/kau005/.local/lib/python3.12/site-packages"
+ExecStart=/usr/bin/python3 /usr/local/bin/meshtastic-usb-collector.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

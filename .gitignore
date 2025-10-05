@@ -1,0 +1,61 @@
+# Secrets and credentials
+secrets/
+meshtracking_secrets/
+*.env
+production.env
+mqtt.conf
+db_password.txt
+AGENTS.md
+AGENTS.md.original
+MQTT_SOLUTION.md
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Docker
+.dockerignore
+
+# Logs
+*.log
+*.log.*
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Backups
+*.backup
+*.backup-*
+*.bak
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+*.sublime-*
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Node modules (if any)
+node_modules/
+
+# Test files
+test_*.html
+*_test.py

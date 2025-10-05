@@ -1,0 +1,30 @@
+# Mosquitto Configuration for Meshtracking All-in-One
+listener 1883 0.0.0.0
+
+# Authentication - Use password file for security
+password_file /etc/mosquitto/passwd
+allow_anonymous false
+
+# Connection limits
+max_connections 1000
+max_inflight_messages 100
+max_queued_messages 1000
+
+# Message size limits
+max_packet_size 65536
+
+# Keep alive settings
+keepalive_interval 60
+
+# Bridge to global Meshtastic MQTT
+connection meshtastic-global
+address mqtt.meshtastic.org:1883
+remote_username ${MQTT_BRIDGE_USER}
+remote_password ${MQTT_BRIDGE_PASS}
+topic msh/EU_868/# in 0 "" ""
+topic msh/2/e/# in 0 "" ""
+bridge_attempt_unsubscribe true
+cleansession true
+try_private false
+notifications false
+bridge_protocol_version mqttv311

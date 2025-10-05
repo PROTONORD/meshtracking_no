@@ -1,0 +1,62 @@
+services:
+  meshtracking:
+    build: .
+    container_name: meshtracking
+    restart: unless-stopped
+    env_file:
+      - secrets/production.env  # Production secrets (not in git)
+    ports:
+      - "8088:8088"    # Web interface - using 8088 on both sides
+      - "1884:1883"    # MQTT broker - host 1884 to avoid conflicts
+      - "5435:5432"    # PostgreSQL - host 5435 (5434 may be used by other service)
+    volumes:
+      - meshtracking_data:/data
+      - postgres_data:/var/lib/postgresql/data  # CRITICAL: Persistent database
+      - ./index.html:/data/index.html  # Mount index.html to /data where Flask serves from
+    devices:
+      - /dev/ttyUSB0:/dev/ttyUSB0  # USB serial device
+    group_add:
+      - "20"  # dialout group for USB serial access
+    environment:
+      # Device Manager Configuration
+      DISCOVERY_INTERVAL: "60"
+      POLL_INTERVAL: "30"
+      MAX_FAIL_COUNT: "10"
+      AUTO_DETECT_NETWORKS: "false"
+      MANUAL_SCAN_NETWORKS: "172.19.228.0/24"
+      MESHTASTIC_TCP_PORT: "4403"
+      SERIAL_PORT: "/dev/ttyUSB0"
+      WEB_PORT: "8088"
+      
+      # Database configuration
+      DB_HOST: "localhost"
+      DB_PORT: "5432"
+      DB_NAME: "meshtastic"
+      DB_USER: "meshuser"
+      # DB_PASSWORD kommer fra env_file
+      
+      # MQTT configuration
+      MQTT_HOST: "localhost"
+      MQTT_PORT: "1883"
+      MQTT_USER: "meshlocal"
+      # MQTT_PASS kommer fra env_file
+      MQTT_TOPIC: "msh/#"
+      
+      # MQTT Bridge kommer fra env_file
+      # MQTT_BRIDGE_USER og MQTT_BRIDGE_PASS
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8088/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+volumes:
+  meshtracking_data:
+    driver: local
+  postgres_data:
+    driver: local
+
+networks:
+  default:
+    name: meshtracking_net

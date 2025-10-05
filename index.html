@@ -1,0 +1,5340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- VERSION: 3.11.0 - Radio/MQTT source filtering with priority logic -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=0.5, minimum-scale=0.3, maximum-scale=2.0, user-scalable=yes">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Meshtastic Map v3.11.0 - Radio/MQTT Sources</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    * { box-sizing: border-box; }
+    html, body { 
+      height: 100%; 
+      margin: 0; 
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    /* Top bar - favorites and legend */
+    .top-bar {
+      background: #fff;
+      border-bottom: 1px solid #ddd;
+      z-index: 1000;
+      flex-shrink: 0;
+    }
+    
+    /* Dropdown containers */
+    .dropdown-container {
+      position: relative;
+      display: inline-block;
+    }
+    
+    .dropdown-trigger {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 6px 12px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: 1px solid #ddd;
+      background: white;
+      font-size: 0.85em;
+      font-weight: 600;
+    }
+    
+    .dropdown-trigger:hover {
+      background: #f5f5f5;
+      border-color: #999;
+    }
+    
+    .dropdown-trigger.active {
+      background: #e3f2fd;
+      border-color: #2196F3;
+      color: #1976d2;
+    }
+    
+    .dropdown-menu {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 1001;
+      min-width: 200px;
+      max-height: 400px;
+      overflow-y: auto;
+      display: none;
+    }
+    
+    .dropdown-menu.show {
+      display: block;
+      animation: dropdownSlide 0.2s ease-out;
+    }
+    
+    @keyframes dropdownSlide {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .dropdown-item {
+      padding: 10px 12px;
+      cursor: pointer;
+      transition: background 0.2s;
+      border-bottom: 1px solid #f0f0f0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.9em;
+    }
+    
+    .dropdown-item:last-child {
+      border-bottom: none;
+    }
+    
+    .dropdown-item:hover {
+      background: #f5f5f5;
+    }
+    
+    .dropdown-item .item-name {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    
+    .dropdown-item .remove-btn {
+      color: #f44336;
+      font-size: 1.2em;
+      margin-left: 8px;
+      opacity: 0.6;
+      transition: opacity 0.2s;
+    }
+    
+    .dropdown-item .remove-btn:hover {
+      opacity: 1;
+    }
+    
+    .dropdown-empty {
+      padding: 20px;
+      text-align: center;
+      color: #999;
+      font-size: 0.85em;
+    }
+    
+    .legend-bar {
+      padding: 8px 10px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      font-size: 0.85em;
+    }
+    
+    .legend-bar .filter-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: 1px solid transparent;
+    }
+    
+    .legend-bar .filter-badge:hover {
+      transform: scale(1.05);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .legend-bar .filter-badge.active {
+      border-color: #333;
+      font-weight: 600;
+    }
+    
+    .legend-bar .filter-badge i {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    
+    /* Map container */
+    #map { 
+      flex: 1;
+      position: relative;
+    }
+    
+    /* Bottom search bar */
+    .search-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: white;
+      padding: 10px;
+      box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    
+    .search-bar input[type="text"] {
+      flex: 0 1 400px;
+      max-width: 400px;
+      padding: 10px 16px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      font-size: 15px;
+      transition: border-color 0.2s;
+    }
+    
+    .search-bar input[type="text"]:focus {
+      outline: none;
+      border-color: #2196F3;
+    }
+    
+    /* Source filter (bottom right) */
+    .source-filter {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      padding: 6px 12px;
+      border-radius: 12px;
+      border: 1px solid #ddd;
+      background: white;
+      font-size: 0.85em;
+      margin-left: 8px;
+    }
+    
+    .source-filter-title {
+      display: none;  /* Hide title */
+    }
+    
+    .source-option {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      font-size: 0.9em;
+      transition: opacity 0.2s;
+    }
+    
+    .source-option:hover {
+      opacity: 0.7;
+    }
+    
+    .source-option input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+    
+    .source-option span {
+      user-select: none;
+    }
+    
+    .search-bar select {
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      background: white;
+      cursor: pointer;
+      min-width: 180px;
+    }
+    
+    .search-bar select:hover {
+      border-color: #1976d2;
+    }    .search-bar label {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.9em;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    
+    .search-bar input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+    
+    @media (max-width: 500px) {
+      .search-bar input[type="text"] {
+        max-width: 100%;
+        flex: 1;
+      }
+    }
+    
+    /* Empty state message */
+    .empty-state {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(255, 255, 255, 0.95);
+      padding: 20px 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      z-index: 500;
+      text-align: center;
+      max-width: 90%;
+    }
+    
+    .empty-state.hidden {
+      display: none;
+    }
+    
+    .empty-state h3 {
+      margin: 0 0 10px;
+      color: #666;
+    }
+    
+    .empty-state p {
+      margin: 0;
+      color: #999;
+      font-size: 0.9em;
+    }
+    
+    /* Popup styling */
+    .leaflet-popup-content {
+      margin: 12px;
+      min-width: 280px;
+      max-width: 400px;
+      box-sizing: border-box;
+    }
+    
+    .leaflet-popup-content-wrapper {
+      max-height: 80vh;
+      overflow-y: auto;
+      max-width: calc(100vw - 80px); /* Increased side padding */
+      border-radius: 8px;
+      box-shadow: 0 3px 14px rgba(0,0,0,0.4);
+    }
+    
+    /* Popup positioning for better viewport centering */
+    .leaflet-popup {
+      margin-bottom: 20px;
+      z-index: 1000;
+    }
+    
+    /* Improved X close button */
+    /* Popup edit button (pencil) - next to close button */
+    .leaflet-popup-edit-button {
+      position: absolute !important;
+      background: rgba(0, 0, 0, 0.85) !important;
+      border: 2px solid #FFD700 !important;
+      border-radius: 50% !important;
+      width: 32px !important;
+      height: 32px !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      font-size: 18px !important;
+      text-decoration: none !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+      padding: 0 !important;
+      top: 8px !important;
+      right: 48px !important;
+      transition: all 0.2s !important;
+      z-index: 10000 !important;
+      cursor: pointer !important;
+    }
+    
+    .leaflet-popup-edit-button:hover {
+      background: rgba(255, 215, 0, 0.95) !important;
+      border-color: #FFA500 !important;
+      transform: scale(1.1) !important;
+    }
+    
+    .leaflet-popup-close-button {
+      background: rgba(0, 0, 0, 0.85) !important;
+      border: 2px solid #ff4444 !important;
+      border-radius: 50% !important;
+      width: 32px !important;
+      height: 32px !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      font-size: 20px !important;
+      font-weight: normal !important;
+      color: white !important;
+      text-decoration: none !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+      padding: 0 !important;
+      top: 8px !important;
+      right: 8px !important;
+      transition: all 0.2s !important;
+      z-index: 10000 !important;
+    }
+    
+    .leaflet-popup-close-button:hover {
+      background: #ff4444 !important;
+      color: white !important;
+      border-color: #ff0000 !important;
+      transform: scale(1.1) !important;
+    }
+    
+    /* Dim background when popup is open */
+    .map-dimmed {
+      filter: brightness(0.6) blur(2px);
+      pointer-events: none;
+    }
+    
+    /* Better popup tip positioning */
+    .leaflet-popup-tip-container {
+      width: 40px;
+      height: 20px;
+      position: absolute;
+      left: 50%;
+      margin-left: -20px;
+      overflow: hidden;
+      pointer-events: none;
+    }
+    
+    /* Hide default popup styling for orbital layout */
+    .leaflet-popup.orbital-popup .leaflet-popup-content-wrapper {
+      background: transparent;
+      border-radius: 0;
+      box-shadow: none;
+      border: none;
+      padding: 0;
+    }
+    
+    .leaflet-popup.orbital-popup .leaflet-popup-content {
+      margin: 0;
+      min-width: auto;
+      max-width: none;
+      padding: 0;
+    }
+    
+    .leaflet-popup.orbital-popup .leaflet-popup-tip {
+      display: none;
+    }
+    
+    /* OVERLAY POD SYSTEM - Shows pods directly on map over scaled node */
+    .map-pod-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 9999;
+      display: none;  /* Hidden by default */
+    }
+    
+    .map-pod-overlay.active {
+      display: block;
+      animation: fadeIn 0.3s ease;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    
+    /* Dimmed background when pods are showing */
+    .map-dimmed-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.3);
+      z-index: 9998;
+      display: none;
+      animation: fadeIn 0.3s ease;
+    }
+    
+    .map-dimmed-overlay.active {
+      display: block;
+    }
+    
+    /* Pod styles for map overlay */
+    .map-data-pod {
+      position: absolute;
+      width: 140px;  /* Increased to prevent text overflow */
+      min-height: 70px;
+      background: rgba(255, 255, 255, 0.98);
+      border-radius: 12px;
+      padding: 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      border: 2px solid transparent;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      pointer-events: auto;
+      animation: podSlideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      cursor: pointer;
+      /* Prevent text overflow */
+      overflow: hidden;
+      word-wrap: break-word;
+      word-break: break-word;
+      hyphens: auto;
+    }
+    
+    @keyframes podSlideIn {
+      from {
+        transform: scale(0.5) translateY(20px);
+        opacity: 0;
+      }
+      to {
+        transform: scale(1) translateY(0);
+        opacity: 1;
+      }
+    }
+    
+    .map-data-pod:hover {
+      transform: scale(1.1);
+      box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+      z-index: 10001;
+    }
+    
+    .map-data-pod.environment { border-color: #4CAF50; }
+    .map-data-pod.power { border-color: #2196F3; }
+    .map-data-pod.network { border-color: #FF9800; }
+    .map-data-pod.weather { border-color: #00BCD4; }
+    .map-data-pod.air-quality { border-color: #9C27B0; }
+    .map-data-pod.info { border-color: #607D8B; }
+    .map-data-pod.tags { border-color: #E91E63; }
+    .map-data-pod.notes { border-color: #FFC107; }
+    .map-data-pod.address { border-color: #009688; }
+    
+    /* Clickable pods get extra visual feedback */
+    .map-data-pod.clickable:hover {
+      transform: scale(1.15);
+      box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+      border-width: 3px;
+    }
+    
+    .map-data-pod.clickable:active {
+      transform: scale(1.05);
+    }
+    
+    /* Empty state pods are slightly transparent */
+    .map-data-pod.empty {
+      border-style: dashed;
+    }
+    
+    .map-data-pod.empty:hover {
+      opacity: 1 !important;
+      border-style: solid;
+    }
+    
+    .map-data-pod .pod-title {
+      font-weight: bold;
+      color: #333;
+      margin-bottom: 6px;  /* Reduced from 8px */
+      font-size: 0.85em;  /* Reduced from 0.9em */
+      border-bottom: 1px solid #eee;
+      padding-bottom: 3px;  /* Reduced from 4px */
+    }
+    
+    .map-data-pod .pod-content {
+      font-size: 0.8em;  /* Reduced from 0.85em */
+      color: #555;
+      line-height: 1.3;  /* Reduced from 1.4 */
+    }
+    
+    .map-data-pod .pod-content strong {
+      color: #333;
+    }
+    
+    /* Close button for overlay */
+    .overlay-close-button {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 50px;
+      height: 50px;
+      background: rgba(255, 255, 255, 0.95);
+      border: 2px solid #f44336;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      cursor: pointer;
+      z-index: 10002;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      transition: all 0.2s ease;
+      pointer-events: auto;
+    }
+    
+    .overlay-close-button:hover {
+      background: #f44336;
+      color: white;
+      transform: scale(1.1) rotate(90deg);
+    }
+    
+    /* ORBITAL POPUP SYSTEM - Revolutionary circular data layout with CSS variables */
+    .orbital-popup-container {
+      position: relative;
+      width: 600px;
+      height: 600px;
+      margin: 0 auto;
+      pointer-events: none;
+      
+      /* CSS Variables for flexible control */
+      --orbital-radius: 260px;      /* Distance from center to pods */
+      --center-size: 160px;          /* Size of center circle */
+      --pod-hover-scale: 1.15;       /* Pod zoom on hover */
+      --center-hover-scale: 1.1;     /* Center zoom on hover */
+    }
+    
+    .orbital-center {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: var(--center-size);
+      height: var(--center-size);
+      border-radius: 50%;
+      background: linear-gradient(135deg, #4CAF50, #2196F3);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+      z-index: 1000;
+      pointer-events: auto;
+      border: 4px solid white;
+      cursor: pointer;
+      transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease, background 0.3s ease;
+      padding: 10px;
+    }
+    
+    .orbital-center:hover {
+      transform: translate(-50%, -50%) scale(var(--center-hover-scale));
+      box-shadow: 0 12px 35px rgba(0,0,0,0.4);
+      border-color: #FFD700;
+      background: linear-gradient(135deg, #FFD700, #FF6B35) !important;
+    }
+    
+    .orbital-center .node-name {
+      font-size: 0.95em;  /* Slightly larger */
+      text-align: center;
+      line-height: 1.2;
+      max-width: 140px;  /* Increased from 100px */
+      word-wrap: break-word;  /* Allow text to wrap */
+      overflow: visible;  /* Changed from hidden */
+    }
+    
+    .orbital-center .node-id {
+      font-size: 0.7em;
+      opacity: 0.8;
+      font-family: monospace;
+      margin-top: 4px;
+    }
+    
+    .orbital-data-pod {
+      position: absolute;
+      width: 140px;
+      min-height: 80px;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 12px;
+      padding: 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+      border: 2px solid transparent;
+      transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease, z-index 0s;
+      pointer-events: auto;
+      animation: orbitalFloat 8s ease-in-out infinite;
+    }
+    
+    .orbital-data-pod:hover {
+      transform: scale(var(--pod-hover-scale));
+      box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+      border-color: #2196F3;
+      z-index: 1001;
+    }
+    
+    .orbital-data-pod.environment {
+      border-color: #4CAF50;
+      animation-delay: 0s;
+    }
+    
+    .orbital-data-pod.power {
+      border-color: #FF9800;
+      animation-delay: 1s;
+    }
+    
+    .orbital-data-pod.network {
+      border-color: #9C27B0;
+      animation-delay: 2s;
+    }
+    
+    .orbital-data-pod.weather {
+      border-color: #607D8B;
+      animation-delay: 3s;
+    }
+    
+    .orbital-data-pod.air-quality {
+      border-color: #F44336;
+      animation-delay: 4s;
+    }
+    
+    .orbital-data-pod.info {
+      border-color: #2196F3;
+      animation-delay: 5s;
+    }
+    
+    .pod-title {
+      font-weight: 600;
+      font-size: 0.8em;
+      margin-bottom: 8px;
+      color: #333;
+      text-align: center;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 4px;
+    }
+    
+    .pod-content {
+      font-size: 0.75em;
+      line-height: 1.3;
+    }
+    
+    .pod-content div {
+      margin-bottom: 3px;
+    }
+    
+    .pod-content strong {
+      color: #555;
+    }
+    
+    /* Floating animation for orbital pods */
+    @keyframes orbitalFloat {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-10px); }
+    }
+    
+    /* Responsive orbital system */
+    @media (max-width: 768px) {
+      .orbital-popup-container {
+        width: 400px;
+        height: 400px;
+        --orbital-radius: 180px;  /* Smaller radius for tablet */
+        --center-size: 120px;     /* Smaller center for tablet */
+      }
+      
+      .orbital-data-pod {
+        width: 100px;
+        min-height: 60px;
+        padding: 8px;
+      }
+      
+      .pod-title {
+        font-size: 0.7em;
+      }
+      
+      .pod-content {
+        font-size: 0.65em;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      .orbital-popup-container {
+        width: 320px;
+        height: 320px;
+        --orbital-radius: 140px;  /* Even smaller radius for mobile */
+        --center-size: 90px;      /* Even smaller center for mobile */
+      }
+      
+      .orbital-data-pod {
+        width: 80px;
+        min-height: 50px;
+        padding: 6px;
+      }
+    }
+    
+    /* Ensure popup content fits in smaller screens */
+    @media (max-width: 480px) {
+      .leaflet-popup-content-wrapper {
+        max-width: calc(100vw - 40px);
+        max-height: calc(100vh - 120px);
+      }
+      
+      .leaflet-popup-content {
+        min-width: 260px;
+        max-width: calc(100vw - 80px);
+      }
+    }
+    
+    /* Ensure all popup inputs and buttons fit within container */
+    .leaflet-popup-content input,
+    .leaflet-popup-content select,
+    .leaflet-popup-content button {
+      box-sizing: border-box;
+      max-width: 100%;
+    }
+    
+    .popup h3 {
+      margin: 0 0 10px;
+      font-size: 1.2em;
+      color: #333;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .fav-btn {
+      background: #3388ff;
+      color: white;
+      border: none;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 0.8em;
+      cursor: pointer;
+      margin-left: auto;
+    }
+    
+    .fav-btn.active {
+      background: #ff6b6b;
+    }
+    
+    .fav-btn:active {
+      opacity: 0.7;
+    }
+    
+    .popup table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 0.95em;
+    }
+    
+    .popup th {
+      text-align: left;
+      font-weight: 600;
+      padding: 6px 12px 6px 0;
+      white-space: nowrap;
+      color: #666;
+    }
+    
+    .popup td {
+      padding: 6px 0;
+      word-break: break-word;
+    }
+    
+    .popup tr {
+      border-bottom: 1px solid #f0f0f0;
+    }
+    
+    .popup tr:last-child {
+      border-bottom: none;
+    }
+    
+    /* Loading indicator */
+    .loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(255, 255, 255, 0.95);
+      padding: 20px 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      z-index: 2000;
+      font-size: 1.1em;
+    }
+    
+    .loading.hidden {
+      display: none;
+    }
+    
+    /* Node labels */
+    .leaflet-div-icon {
+      background: transparent !important;
+      border: none !important;
+      pointer-events: auto !important;
+    }
+    
+    .node-label {
+      background: rgba(255, 255, 255, 0.95);
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      padding: 4px 8px 4px 24px;  /* Extra padding left for icon */
+      font-size: 12px !important;
+      font-weight: 600;
+      white-space: nowrap;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      pointer-events: auto;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      z-index: 1000;
+      position: relative;
+      display: inline-block;
+      transform: translateY(-10px);  /* Move label slightly above node */
+      min-height: 24px;
+      line-height: 16px;
+      /* FIXED SIZE - prevent zoom scaling */
+      width: auto !important;
+      height: auto !important;
+    }
+    
+    /* Active state when clicked - node scales up */
+    .node-label.active {
+      transform: scale(1.8) !important;  /* Removed translateY(-10px) to keep centered */
+      transform-origin: center center !important;  /* Ensure it scales from center */
+      z-index: 10000 !important;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4) !important;
+      background: rgba(255, 255, 255, 1) !important;
+      border-width: 3px !important;
+      font-size: 14px !important;
+    }
+    
+    /* Force Leaflet to not scale our labels */
+    .node-label {
+      transform-origin: center center !important;  /* Always scale from center */
+    }
+    
+    .node-label::before {
+      content: '';
+      position: absolute;
+      left: 4px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #999;
+      border: 2px solid #fff;
+    }
+    
+    .node-label:hover {
+      transform: translateY(-10px) scale(1.05);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 1001;
+      background: rgba(255, 255, 255, 1);
+      border-color: #3388ff;
+    }
+    
+    .node-label:active {
+      transform: translateY(-10px) scale(0.98);
+      background: rgba(51, 136, 255, 0.1);
+    }
+    
+    .node-label.online {
+      border-color: #4CAF50;
+      color: #2e7d32;
+    }
+    
+    .node-label.online::before {
+      background: #4CAF50;
+    }
+    
+    .node-label.recent {
+      border-color: #FFA726;
+      color: #e65100;
+    }
+    
+    .node-label.recent::before {
+      background: #FFA726;
+    }
+    
+    .node-label.offline {
+      border-color: #999;
+      color: #666;
+    }
+    
+    .node-label.offline::before {
+      background: #999;
+    }
+    
+    .node-label.favorite {
+      border-color: #3388ff;
+      color: #1565c0;
+      font-weight: 700;
+      background: rgba(51, 136, 255, 0.05);
+    }
+    
+    .node-label.favorite::before {
+      background: #3388ff;
+      border-color: #fff;
+      box-shadow: 0 0 0 1px #3388ff;
+    }
+    
+    /* Stacked label positioning */
+    .node-label.stacked-1 {
+      transform: translateY(-45px);
+    }
+    .node-label.stacked-2 {
+      transform: translateY(-80px);
+    }
+    .node-label.stacked-3 {
+      transform: translateY(-115px);
+    }
+    .node-label.stacked-4 {
+      transform: translateY(-150px);
+    }
+    .node-label.stacked-1:hover {
+      transform: translateY(-45px) scale(1.05);
+    }
+    .node-label.stacked-2:hover {
+      transform: translateY(-80px) scale(1.05);
+    }
+    .node-label.stacked-3:hover {
+      transform: translateY(-115px) scale(1.05);
+    }
+    .node-label.stacked-4:hover {
+      transform: translateY(-150px) scale(1.05);
+    }
+    
+    /* Search results list (moved from sidebar - for future use) */
+    .search-results {
+      max-height: 300px;
+      overflow-y: auto;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      margin-top: 10px;
+      background: white;
+    }
+    
+    .search-result-item {
+      padding: 12px;
+      border-bottom: 1px solid #f0f0f0;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .search-result-item:hover {
+      background: #f5f5f5;
+    }
+    
+    .search-result-item:last-child {
+      border-bottom: none;
+    }
+    
+    .search-result-item .node-info {
+      flex: 1;
+    }
+    
+    .search-result-item .node-name {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 2px;
+    }
+    
+    .search-result-item .node-id {
+      font-size: 0.85em;
+      color: #666;
+      font-family: monospace;
+    }
+    
+    .search-result-item .node-status {
+      font-size: 0.85em;
+      padding: 2px 8px;
+      border-radius: 12px;
+    }
+    
+    .search-result-item .node-status.has-position {
+      background: #4CAF50;
+      color: white;
+    }
+    
+    .search-result-item .node-status.no-position {
+      background: #999;
+      color: white;
+    }
+    
+    /* ==================== ADDRESS AUTOCOMPLETE ==================== */
+    .address-autocomplete {
+      position: relative;
+      display: inline-block;
+      width: 100%;
+    }
+    
+    .address-suggestions {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: white;
+      border: 1px solid #ddd;
+      border-top: none;
+      border-radius: 0 0 4px 4px;
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 1000;
+      display: none;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .address-suggestion {
+      padding: 12px;
+      cursor: pointer;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 0.9em;
+    }
+    
+    .address-suggestion:last-child {
+      border-bottom: none;
+    }
+    
+    .address-suggestion:hover {
+      background: #f5f5f5;
+    }
+    
+    .address-suggestion.selected {
+      background: #e3f2fd;
+    }
+    
+    .address-suggestion .main-text {
+      font-weight: 600;
+      color: #333;
+    }
+    
+    .address-suggestion .secondary-text {
+      font-size: 0.85em;
+      color: #666;
+      margin-top: 2px;
+    }
+    
+    .address-loading {
+      padding: 12px;
+      text-align: center;
+      color: #666;
+      font-size: 0.9em;
+    }
+    
+    /* ==================== MOBILE FULLSCREEN EDIT MODAL ==================== */
+    .mobile-edit-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: white;
+      z-index: 2000;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    
+    .mobile-edit-modal.active {
+      display: block;
+    }
+    
+    .mobile-edit-header {
+      background: #2196F3;
+      color: white;
+      padding: 15px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      position: sticky;
+      top: 0;
+      z-index: 2001;
+    }
+    
+    .mobile-edit-header h3 {
+      margin: 0;
+      font-size: 1.1em;
+      font-weight: 600;
+    }
+    
+    .mobile-edit-close {
+      background: none;
+      border: none;
+      color: white;
+      font-size: 1.5em;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    
+    .mobile-edit-close:hover {
+      background: rgba(255,255,255,0.1);
+    }
+    
+    .mobile-edit-content {
+      padding: 20px;
+    }
+    
+    .mobile-edit-section {
+      margin-bottom: 30px;
+    }
+    
+    .mobile-edit-section h4 {
+      margin: 0 0 15px 0;
+      font-size: 1em;
+      color: #333;
+      font-weight: 600;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 8px;
+    }
+    
+    .mobile-tag-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 15px;
+    }
+    
+    .mobile-tag-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 20px;
+      font-size: 0.9em;
+      border: 1px solid;
+      cursor: default;
+    }
+    
+    .mobile-tag-chip.nickname {
+      background: #e3f2fd;
+      border-color: #2196F3;
+      color: #1565C0;
+    }
+    
+    .mobile-tag-chip.category {
+      background: #fff3e0;
+      border-color: #FF9800;
+      color: #E65100;
+    }
+    
+    .mobile-tag-chip.custom {
+      background: #f3e5f5;
+      border-color: #9C27B0;
+      color: #6A1B9A;
+    }
+    
+    .mobile-tag-chip .remove-tag {
+      cursor: pointer;
+      opacity: 0.7;
+      font-weight: bold;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .mobile-tag-chip .remove-tag:hover {
+      opacity: 1;
+      background: rgba(0,0,0,0.1);
+    }
+    
+    .mobile-tag-input {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    
+    .mobile-tag-input input,
+    .mobile-tag-input select {
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 16px; /* Prevent zoom on iOS */
+      background: white;
+    }
+    
+    .mobile-tag-input button {
+      padding: 15px;
+      background: #2196F3;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    
+    .mobile-tag-input button:active {
+      background: #1976D2;
+    }
+    
+    .mobile-position-info {
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      font-size: 0.9em;
+    }
+    
+    .mobile-position-form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    .mobile-position-form input {
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 16px;
+      background: white;
+    }
+    
+    .mobile-button-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 15px;
+    }
+    
+    .mobile-button-group button {
+      padding: 15px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    
+    .mobile-button-group button.primary {
+      background: #2196F3;
+      color: white;
+    }
+    
+    .mobile-button-group button.secondary {
+      background: #e0e0e0;
+      color: #333;
+    }
+    
+    .mobile-button-group button.danger {
+      background: #f44336;
+      color: white;
+    }
+    
+    .mobile-button-group button:active {
+      opacity: 0.8;
+    }
+    
+    .mobile-notes-textarea {
+      width: 100%;
+      min-height: 120px;
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 16px;
+      resize: vertical;
+      background: white;
+      box-sizing: border-box;
+    }
+    
+    /* ==================== DESKTOP FULLSCREEN EDIT MODAL ==================== */
+    .desktop-edit-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 10000;
+      display: none;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    
+    .desktop-edit-modal.active {
+      display: flex;
+      opacity: 1;
+    }
+    
+    .desktop-edit-content {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      width: calc(100% - 40px);
+      height: calc(100% - 40px);
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    
+    .desktop-edit-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid #eee;
+      background: #f8f9fa;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    
+    .desktop-edit-body {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    
+    .desktop-edit-section {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 20px;
+      height: fit-content;
+    }
+    
+    .desktop-edit-section h4 {
+      margin: 0 0 16px 0;
+      font-size: 1.1em;
+      color: #333;
+      border-bottom: 2px solid #2196F3;
+      padding-bottom: 8px;
+    }
+    
+    @media (max-width: 1200px) {
+      .desktop-edit-body {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* ==================== MOBILE RESPONSIVE ==================== */
+    @media (max-width: 768px) {
+      /* Hide sidebar toggle on mobile since we use the mobile modal */
+      .sidebar-toggle {
+        display: none;
+      }
+      
+      /* Sidebar full width on mobile (hidden by default) */
+      .sidebar {
+        width: 100%;
+        right: -100%;
+        display: none; /* Hide sidebar completely on mobile */
+      }
+      
+      /* Smaller sidebar padding */
+      .sidebar-content {
+        padding: 15px;
+      }
+      
+      /* Top bar adjustments */
+      .top-bar {
+        font-size: 0.85em;
+      }
+      
+      .favorites-bar {
+        padding: 6px 8px;
+      }
+      
+      .legend-bar {
+        padding: 6px 8px;
+        font-size: 0.8em;
+        flex-wrap: wrap;
+      }
+      
+      .filter-badge {
+        font-size: 0.75em;
+        padding: 3px 8px;
+      }
+      
+      /* Bottom search bar */
+      .search-bar {
+        flex-wrap: wrap;
+        padding: 8px;
+        gap: 8px;
+      }
+      
+      .search-bar input,
+      .search-bar select {
+        flex: 1 1 45%;
+        min-width: 0;
+        font-size: 0.85em;
+      }
+      
+      .search-bar label {
+        flex: 1 1 40%;
+        font-size: 0.85em;
+      }
+      
+      .search-bar button {
+        flex: 1 1 100%;
+        padding: 10px;
+      }
+      
+      /* Tag input group mobile */
+      .tag-input-group {
+        flex-wrap: wrap;
+      }
+      
+      .tag-input-group input {
+        flex: 1 1 100%;
+      }
+      
+      .tag-input-group select {
+        flex: 1 1 60%;
+      }
+      
+      .tag-input-group button {
+        flex: 1 1 35%;
+      }
+      
+      /* Position form mobile */
+      .position-form input {
+        font-size: 16px; /* Prevent zoom on iOS */
+      }
+      
+      /* Make node labels smaller on mobile */
+      .node-label {
+        font-size: 10px;
+        padding: 1px 4px;
+      }
+      
+      /* Popup adjustments for mobile */
+      .leaflet-popup-content {
+        min-width: 240px; /* Smaller minimum width */
+        max-width: calc(100vw - 80px); /* More conservative mobile width */
+        font-size: 0.9em;
+        margin: 8px; /* Reduced margin for mobile */
+      }
+      
+      .leaflet-popup-content-wrapper {
+        max-width: calc(100vw - 60px);
+        max-height: 75vh; /* Slightly less height to ensure visibility */
+      }
+      
+      /* Ensure popup doesn't exceed viewport on mobile */
+      .leaflet-popup {
+        margin-bottom: 30px;
+      }
+      
+      /* Search results mobile */
+      .search-results {
+        max-height: 250px;
+      }
+      
+      .search-result-item {
+        padding: 10px;
+        font-size: 0.9em;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      /* Extra small screens */
+      .sidebar-toggle {
+        padding: 6px 10px;
+        font-size: 0.8em;
+      }
+      
+      .sidebar-header h3 {
+        font-size: 1em;
+      }
+      
+      .sidebar-content {
+        padding: 12px;
+      }
+      
+      .sidebar-section h4 {
+        font-size: 0.85em;
+      }
+      
+      .tag-chip {
+        font-size: 0.85em;
+        padding: 4px 8px;
+      }
+      
+      .position-info {
+        padding: 10px;
+        font-size: 0.85em;
+      }
+      
+      /* Stack everything in position form */
+      .position-form .button-group {
+        flex-direction: column;
+      }
+      
+      .position-form button {
+        width: 100%;
+      }
+      
+      /* Smaller node labels */
+      .node-label {
+        font-size: 9px;
+        padding: 1px 3px;
+      }
+    }
+    
+    /* Touch-friendly tap targets */
+    @media (pointer: coarse) {
+      .dropdown-trigger,
+      .dropdown-item,
+      .tag-chip .remove-tag,
+      .close-sidebar {
+        min-width: 44px;
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      
+      .node-label {
+        cursor: pointer;
+        -webkit-tap-highlight-color: rgba(0,0,0,0.1);
+      }
+    }
+    
+    /* Prevent text selection on touch devices */
+    @media (pointer: coarse) {
+      .dropdown-trigger,
+      .dropdown-item,
+      .tag-chip,
+      .node-label {
+        -webkit-user-select: none;
+        user-select: none;
+      }
+    }
+
+    /* Mobile Responsive Fixes */
+    @media (max-width: 768px) {
+      .top-bar {
+        padding: 0;
+      }
+      
+      .legend-bar {
+        padding: 4px 6px;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      
+      .dropdown-trigger {
+        font-size: 0.8em;
+        padding: 5px 10px;
+      }
+      
+      .dropdown-menu {
+        max-height: 300px;
+      }
+      
+      .legend-bar {
+        padding: 6px;
+        gap: 6px;
+      }
+      
+      .search-container {
+        padding: 4px 6px;
+      }
+      
+      .search-container input {
+        padding: 6px 10px;
+        font-size: 14px; /* Smaller but still prevents zoom */
+      }
+      
+      /* Ensure map takes full mobile screen */
+      #map {
+        height: calc(100vh - 100px) !important;
+        min-height: 300px;
+      }
+      
+      /* Better mobile node labels */
+      .node-label {
+        font-size: 9px;
+        padding: 2px 4px 2px 16px;
+        min-height: 16px;
+        line-height: 12px;
+      }
+      
+      .node-label::before {
+        width: 8px;
+        height: 10px;
+        left: 3px;
+      }
+      
+      /* Mobile popup improvements */
+      .leaflet-popup-content-wrapper {
+        max-width: calc(100vw - 40px) !important;
+        margin: 0 !important;
+      }
+      
+      .leaflet-popup-content {
+        margin: 10px !important;
+        line-height: 1.3 !important;
+      }
+      
+      /* Source filter on mobile */
+      .source-filter {
+        /* Now in top bar, no mobile-specific positioning needed */
+        gap: 8px;
+        padding: 6px 10px;
+        font-size: 0.8em;
+        margin-left: 4px;
+      }
+      
+      .source-filter-title {
+        display: none;
+      }
+      
+      .source-option {
+        font-size: 0.8em;
+        gap: 5px;
+      }
+      
+      .source-option input[type="checkbox"] {
+        width: 14px;
+        height: 14px;
+      }
+    }
+
+    /* Small mobile devices */
+    @media (max-width: 480px) {
+      /* Fix mobile viewport issues */
+      html, body {
+        overflow: auto !important;
+        height: 100vh !important;
+        width: 100vw !important;
+        position: relative !important;
+      }
+      
+      /* Ensure search bar is always visible - compensate for 0.5 scale */
+      .search-bar {
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        z-index: 9999 !important;
+        background: white !important;
+        padding: 16px !important;
+        gap: 12px !important;
+        flex-wrap: wrap !important;
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.3) !important;
+        display: flex !important;
+        font-size: 20px !important;
+        border-top: 3px solid #007cba !important;
+      }
+      
+      .search-bar input[type="text"] {
+        flex: 1 !important;
+        min-width: 160px !important;
+        font-size: 22px !important;
+        padding: 14px !important;
+        border: 2px solid #ddd !important;
+        border-radius: 8px !important;
+      }
+      
+      .search-bar select {
+        font-size: 20px !important;
+        padding: 14px 10px !important;
+        min-width: 120px !important;
+        border: 2px solid #ddd !important;
+        border-radius: 8px !important;
+      }
+      
+      /* Remove body scaling - causes too many issues */
+      
+      .legend-bar {
+        flex-wrap: wrap;
+        gap: 2px;
+        padding: 6px;
+      }
+      
+      .legend-bar .filter-badge {
+        flex: 1;
+        min-width: 40px;
+        padding: 3px 4px;
+        font-size: 9px;
+      }
+      
+      .search-container input {
+        font-size: 14px;
+        padding: 4px 8px;
+        width: calc(100% - 20px) !important;
+        margin: 5px 10px !important;
+      }
+      
+      #map {
+        height: 100vh !important;
+        width: 100vw !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        z-index: 1 !important;
+      }
+      
+      .node-label {
+        font-size: 8px;
+        padding: 1px 3px 1px 12px;
+        min-height: 14px;
+      }
+      
+      .node-label::before {
+        width: 6px;
+        height: 6px;
+        left: 2px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="loading" class="loading">Loading map...</div>
+  
+  <!-- Mobile Edit Modal -->
+  <div id="mobileEditModal" class="mobile-edit-modal">
+    <div class="mobile-edit-header">
+      <h3 id="mobileEditTitle">Rediger Node</h3>
+      <button class="mobile-edit-close" onclick="closeMobileEdit()">×</button>
+    </div>
+    <div class="mobile-edit-content">
+      <!-- Tags Section -->
+      <div class="mobile-edit-section">
+        <h4>🏷️ Tags</h4>
+        <div id="mobileTagList" class="mobile-tag-list">
+          <span style="color:#999; font-size:0.9em;">Ingen tags</span>
+        </div>
+        <div class="mobile-tag-input">
+          <input type="text" id="mobileTagInput" placeholder="Skriv ny tag...">
+          <select id="mobileTagType">
+            <option value="nickname">Kallenavn</option>
+            <option value="category">Kategori</option>
+            <option value="custom">Custom</option>
+          </select>
+          <button onclick="addMobileTag()">Legg til tag</button>
+        </div>
+      </div>
+      
+      <!-- Position Section -->
+      <div class="mobile-edit-section">
+        <h4>📍 Posisjon</h4>
+        <div id="mobilePositionInfo" class="mobile-position-info">
+          <div style="color:#999;">Ingen posisjon</div>
+        </div>
+        <div id="mobilePositionForm" style="display:none;">
+          <div class="mobile-position-form">
+            <input type="number" id="mobileLat" placeholder="Latitude (f.eks. 69.6812)" step="0.000001">
+            <input type="number" id="mobileLon" placeholder="Longitude (f.eks. 18.9895)" step="0.000001">
+            <input type="number" id="mobileAlt" placeholder="Altitude (meter)" step="1">
+            <div class="address-autocomplete">
+              <input type="text" id="mobileAddress" placeholder="Søk adresse (f.eks. Sentrum, Tromsø)" autocomplete="off"
+                     oninput="handleAddressInput(this, 'mobile', 'mobile')" 
+                     onkeydown="handleAddressKeydown(event, 'mobile', 'mobile')"
+                     onfocus="showAddressSuggestions('mobile', 'mobile')"
+                     onblur="hideAddressSuggestions('mobile', 'mobile')">
+              <div id="mobile-addr-suggestions-mobile" class="address-suggestions"></div>
+            </div>
+          </div>
+        </div>
+        <div class="mobile-button-group" id="mobilePositionButtons">
+          <button class="primary" onclick="showMobilePositionForm()">Sett posisjon</button>
+          <button class="danger" onclick="removeMobilePosition()" id="mobileRemovePositionBtn" style="display:none;">Fjern manuell posisjon</button>
+        </div>
+        <div class="mobile-button-group" id="mobilePositionSaveButtons" style="display:none;">
+          <button class="primary" onclick="saveMobilePosition()">Lagre posisjon</button>
+          <button class="secondary" onclick="hideMobilePositionForm()">Avbryt</button>
+        </div>
+      </div>
+      
+      <!-- Notes Section -->
+      <div class="mobile-edit-section">
+        <h4>📝 Notater</h4>
+        <textarea id="mobileNotesTextarea" class="mobile-notes-textarea" placeholder="Legg til notater om denne noden..."></textarea>
+        <div class="mobile-button-group">
+          <button class="primary" onclick="saveMobileNotes()">Lagre notater</button>
+        </div>
+      </div>
+      
+      <!-- Live Telemetry Section -->
+      <div class="mobile-edit-section" id="mobileTelemetrySection">
+        <h4 style="display: flex; align-items: center; gap: 8px;">
+          📊 Live Telemetri 
+          <span style="font-size: 0.7em; color: #4CAF50; font-weight: normal;">🔴 LIVE</span>
+        </h4>
+        <div style="background: #f8f9fa; padding: 12px; border-radius: 6px; border: 1px solid #e8f5e8;">
+          
+          <!-- Temperature & Environment -->
+          <div style="margin-bottom: 15px;">
+            <div style="font-weight: 600; margin-bottom: 8px; color: #2196F3;">🌡️ Temperature & Environment</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.85em;">
+              <div><strong>Temperatur:</strong> <span id="mobile-temperature">N/A</span></div>
+              <div><strong>Luftfuktighet:</strong> <span id="mobile-humidity">N/A</span></div>
+              <div><strong>Barometrisk trykk:</strong> <span id="mobile-pressure">N/A</span></div>
+              <div><strong>Gas resistanse:</strong> <span id="mobile-gas_resistance">N/A</span></div>
+            </div>
+          </div>
+
+          <!-- Power & Battery -->
+          <div style="margin-bottom: 15px;">
+            <div style="font-weight: 600; margin-bottom: 8px; color: #4CAF50;">🔋 Power & Battery</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.85em;">
+              <div><strong>Batteri:</strong> <span id="mobile-battery">N/A</span></div>
+              <div><strong>Spenning:</strong> <span id="mobile-voltage">N/A</span></div>
+              <div><strong>Strøm:</strong> <span id="mobile-current">N/A</span></div>
+              <div><strong>Power:</strong> <span id="mobile-power">N/A</span></div>
+            </div>
+          </div>
+
+          <!-- Air Quality -->
+          <div style="margin-bottom: 15px;">
+            <div style="font-weight: 600; margin-bottom: 8px; color: #FF9800;">🌬️ Air Quality</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.85em;">
+              <div><strong>PM1.0:</strong> <span id="mobile-pm10_standard">N/A</span></div>
+              <div><strong>PM2.5:</strong> <span id="mobile-pm25_standard">N/A</span></div>
+              <div><strong>PM10:</strong> <span id="mobile-pm100_standard">N/A</span></div>
+              <div><strong>IAQ Index:</strong> <span id="mobile-iaq">N/A</span></div>
+            </div>
+          </div>
+
+          <!-- Weather & Outdoor -->
+          <div style="margin-bottom: 15px;">
+            <div style="font-weight: 600; margin-bottom: 8px; color: #607D8B;">☀️ Weather & Outdoor</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.85em;">
+              <div><strong>Vind retning:</strong> <span id="mobile-wind_direction">N/A</span></div>
+              <div><strong>Vind hastighet:</strong> <span id="mobile-wind_speed">N/A</span></div>
+              <div><strong>Regn per time:</strong> <span id="mobile-rain_hourly">N/A</span></div>
+              <div><strong>UV Index:</strong> <span id="mobile-uv_index">N/A</span></div>
+            </div>
+          </div>
+
+          <!-- Light & Sensors -->
+          <div style="margin-bottom: 15px;">
+            <div style="font-weight: 600; margin-bottom: 8px; color: #FF5722;">💡 Light & Sensors</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.85em;">
+              <div><strong>Lux:</strong> <span id="mobile-lux">N/A</span></div>
+              <div><strong>PIR:</strong> <span id="mobile-pir">N/A</span></div>
+              <div><strong>Ambient lys:</strong> <span id="mobile-ambient_light">N/A</span></div>
+              <div><strong>Solar irradiance:</strong> <span id="mobile-solar_irradiance">N/A</span></div>
+            </div>
+          </div>
+
+          <!-- Network & Connectivity -->
+          <div style="margin-bottom: 15px;">
+            <div style="font-weight: 600; margin-bottom: 8px; color: #9C27B0;">📡 Network & Connectivity</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.85em;">
+              <div><strong>SNR:</strong> <span id="mobile-snr">N/A</span></div>
+              <div><strong>Høyde:</strong> <span id="mobile-altitude">N/A</span></div>
+              <div><strong>Kanal util:</strong> <span id="mobile-channel_utilization">N/A</span></div>
+              <div><strong>Air util TX:</strong> <span id="mobile-air_util_tx">N/A</span></div>
+            </div>
+          </div>
+          
+          <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #ddd; font-size: 0.85em; color: #666;">
+            <strong>Sist sett:</strong> <span id="mobile-lastheard">N/A</span> 
+            <span id="mobile-ago"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Desktop Fullscreen Edit Modal -->
+  <div id="desktopEditModal" class="desktop-edit-modal">
+    <div class="desktop-edit-content">
+      <div class="desktop-edit-header">
+        <h2 id="desktopEditTitle">Rediger Node</h2>
+        <button onclick="closeDesktopEdit()" style="background: #f44336; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 1em;">
+          ✕ Lukk
+        </button>
+      </div>
+      
+      <div class="desktop-edit-body">
+        <!-- Left Column -->
+        <div>
+          <!-- Tags Section -->
+          <div class="desktop-edit-section">
+            <h4>🏷️ Tags</h4>
+            <div id="desktopTagList" style="margin-bottom: 15px; min-height: 60px; display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; padding: 12px; background: #f8f9fa; border-radius: 6px; border: 2px dashed #ddd;">
+              <!-- Tags will be loaded here -->
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <input type="text" id="desktopNewTag" placeholder="Ny tag..." style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px;">
+              <select id="desktopTagType" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px;">
+                <option value="info">Info</option>
+                <option value="warning">Advarsel</option>
+                <option value="success">Suksess</option>
+              </select>
+              <button onclick="addDesktopTag()" style="background: #4CAF50; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 16px;">Legg til</button>
+            </div>
+          </div>
+          
+          <!-- Position Section -->
+          <div class="desktop-edit-section">
+            <h4>📍 Posisjon</h4>
+            <div id="desktopPositionInfo" style="margin-bottom: 15px; padding: 12px; background: #f8f9fa; border-radius: 6px;">
+              <!-- Position info will be loaded here -->
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <input type="number" id="desktop-lat" placeholder="Latitude (valgfri)" step="0.000001" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px;">
+              <input type="number" id="desktop-lon" placeholder="Longitude (valgfri)" step="0.000001" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px;">
+              <div class="address-autocomplete">
+                <input type="text" id="desktop-addr" placeholder="Søk adresse (f.eks. Sentrum, Tromsø)" autocomplete="off" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; box-sizing: border-box;" oninput="handleAddressInput(this, getActiveDesktopNodeId(), 'desktop')" onkeydown="handleAddressKeydown(event, getActiveDesktopNodeId(), 'desktop')" onfocus="showAddressSuggestions(getActiveDesktopNodeId(), 'desktop')" onblur="hideAddressSuggestions(getActiveDesktopNodeId(), 'desktop')">
+                <div id="desktop-addr-suggestions" class="address-suggestions"></div>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button onclick="saveDesktopPosition()" style="flex: 1; background: #2196F3; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 16px;">💾 Lagre posisjon</button>
+                <button onclick="removeDesktopPosition()" id="desktopRemovePositionBtn" style="background: #f44336; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 16px; display: none;">🗑️</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Right Column -->
+        <div>
+          <!-- Notes Section -->
+          <div class="desktop-edit-section">
+            <h4>📝 Notater</h4>
+            <textarea id="desktopNotesTextarea" style="width: 100%; height: 120px; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; resize: vertical; box-sizing: border-box;" placeholder="Legg til notater om denne noden..."></textarea>
+            <button onclick="saveDesktopNotes()" style="width: 100%; margin-top: 10px; background: #4CAF50; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; font-size: 16px;">Lagre notater</button>
+          </div>
+          
+          <!-- Live Telemetry Section -->
+          <div class="desktop-edit-section" id="desktopTelemetrySection">
+            <h4 style="display: flex; align-items: center; gap: 8px;">
+              📊 Live Telemetri 
+              <span style="font-size: 0.7em; color: #4CAF50; font-weight: normal;">🔴 LIVE</span>
+            </h4>
+            <div style="background: #f8f9fa; padding: 16px; border-radius: 6px; border: 1px solid #e8f5e8;">
+              
+              <!-- Temperature & Environment -->
+              <div style="margin-bottom: 20px;">
+                <div style="font-weight: 600; margin-bottom: 10px; color: #2196F3; font-size: 1.1em;">🌡️ Temperature & Environment</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.95em;">
+                  <div><strong>Temperatur:</strong> <span id="desktop-temperature">N/A</span></div>
+                  <div><strong>Luftfuktighet:</strong> <span id="desktop-humidity">N/A</span></div>
+                  <div><strong>Barometrisk trykk:</strong> <span id="desktop-pressure">N/A</span></div>
+                  <div><strong>Gas resistanse:</strong> <span id="desktop-gas_resistance">N/A</span></div>
+                </div>
+              </div>
+
+              <!-- Power & Battery -->
+              <div style="margin-bottom: 20px;">
+                <div style="font-weight: 600; margin-bottom: 10px; color: #4CAF50; font-size: 1.1em;">🔋 Power & Battery</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.95em;">
+                  <div><strong>Batteri:</strong> <span id="desktop-battery">N/A</span></div>
+                  <div><strong>Spenning:</strong> <span id="desktop-voltage">N/A</span></div>
+                  <div><strong>Strøm:</strong> <span id="desktop-current">N/A</span></div>
+                  <div><strong>Power:</strong> <span id="desktop-power">N/A</span></div>
+                </div>
+              </div>
+
+              <!-- Air Quality -->
+              <div style="margin-bottom: 20px;">
+                <div style="font-weight: 600; margin-bottom: 10px; color: #FF9800; font-size: 1.1em;">🌬️ Air Quality</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.95em;">
+                  <div><strong>PM1.0:</strong> <span id="desktop-pm10_standard">N/A</span></div>
+                  <div><strong>PM2.5:</strong> <span id="desktop-pm25_standard">N/A</span></div>
+                  <div><strong>PM10:</strong> <span id="desktop-pm100_standard">N/A</span></div>
+                  <div><strong>IAQ Index:</strong> <span id="desktop-iaq">N/A</span></div>
+                </div>
+              </div>
+
+              <!-- Weather & Outdoor -->
+              <div style="margin-bottom: 20px;">
+                <div style="font-weight: 600; margin-bottom: 10px; color: #607D8B; font-size: 1.1em;">☀️ Weather & Outdoor</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.95em;">
+                  <div><strong>Vind retning:</strong> <span id="desktop-wind_direction">N/A</span></div>
+                  <div><strong>Vind hastighet:</strong> <span id="desktop-wind_speed">N/A</span></div>
+                  <div><strong>Regn per time:</strong> <span id="desktop-rain_hourly">N/A</span></div>
+                  <div><strong>UV Index:</strong> <span id="desktop-uv_index">N/A</span></div>
+                </div>
+              </div>
+
+              <!-- Light & Sensors -->
+              <div style="margin-bottom: 20px;">
+                <div style="font-weight: 600; margin-bottom: 10px; color: #FF5722; font-size: 1.1em;">💡 Light & Sensors</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.95em;">
+                  <div><strong>Lux:</strong> <span id="desktop-lux">N/A</span></div>
+                  <div><strong>PIR:</strong> <span id="desktop-pir">N/A</span></div>
+                  <div><strong>Ambient lys:</strong> <span id="desktop-ambient_light">N/A</span></div>
+                  <div><strong>Solar irradiance:</strong> <span id="desktop-solar_irradiance">N/A</span></div>
+                </div>
+              </div>
+
+              <!-- Network & Connectivity -->
+              <div style="margin-bottom: 20px;">
+                <div style="font-weight: 600; margin-bottom: 10px; color: #9C27B0; font-size: 1.1em;">📡 Network & Connectivity</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.95em;">
+                  <div><strong>SNR:</strong> <span id="desktop-snr">N/A</span></div>
+                  <div><strong>Høyde:</strong> <span id="desktop-altitude">N/A</span></div>
+                  <div><strong>Kanal util:</strong> <span id="desktop-channel_utilization">N/A</span></div>
+                  <div><strong>Air util TX:</strong> <span id="desktop-air_util_tx">N/A</span></div>
+                </div>
+              </div>
+              
+              <div style="margin-top: 15px; padding-top: 12px; border-top: 1px solid #ddd; font-size: 0.9em; color: #666;">
+                <strong>Sist sett:</strong> <span id="desktop-lastheard">N/A</span> 
+                <span id="desktop-ago"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Top bar with favorites and legend -->
+  <div class="top-bar">
+    <div class="legend-bar">
+      <!-- Favorites Dropdown -->
+      <div class="dropdown-container">
+        <div class="dropdown-trigger" id="favDropdownTrigger">
+          ⭐ Favoritter (<span id="count-fav">0</span>) ▾
+        </div>
+        <div class="dropdown-menu" id="favDropdownMenu">
+          <div class="dropdown-empty">Ingen favoritter ennå</div>
+        </div>
+      </div>
+      
+      <!-- Status Filters Dropdown -->
+      <div class="dropdown-container">
+        <div class="dropdown-trigger" id="statusDropdownTrigger">
+          🔘 Status (<span id="total-nodes">0</span>) ▾
+        </div>
+        <div class="dropdown-menu" id="statusDropdownMenu">
+          <div class="dropdown-item" data-filter="all" style="font-weight: 600; border-bottom: 2px solid #ddd;">
+            <span class="item-name">
+              <i style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #2196F3; margin-right: 8px;"></i>
+              Alle (<span id="total-nodes-menu">0</span>)
+            </span>
+          </div>
+          <div class="dropdown-item" data-filter="online">
+            <span class="item-name">
+              <i style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #4CAF50; margin-right: 8px;"></i>
+              Online (<span id="count-online">0</span>)
+            </span>
+          </div>
+          <div class="dropdown-item" data-filter="recent">
+            <span class="item-name">
+              <i style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #FFA726; margin-right: 8px;"></i>
+              Recent (<span id="count-recent">0</span>)
+            </span>
+          </div>
+          <div class="dropdown-item" data-filter="offline">
+            <span class="item-name">
+              <i style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #999; margin-right: 8px;"></i>
+              Offline (<span id="count-offline">0</span>)
+            </span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Source Filter (Radio/MQTT) -->
+      <div class="source-filter">
+        <div class="source-filter-title">📡 Datakilde:</div>
+        <label class="source-option">
+          <input type="checkbox" id="sourceRadio" value="radio" checked>
+          <span>📻 Radio</span>
+        </label>
+        <label class="source-option">
+          <input type="checkbox" id="sourceMQTT" value="mqtt" checked>
+          <span>📡 MQTT</span>
+        </label>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Map -->
+  <div id="map"></div>
+  
+  <!-- Dimmed overlay for when pods are showing -->
+  <div id="mapDimmedOverlay" class="map-dimmed-overlay"></div>
+  
+  <!-- Pod overlay container -->
+  <div id="mapPodOverlay" class="map-pod-overlay">
+    <div class="overlay-close-button" onclick="closePodOverlay()">✕</div>
+    <div id="podContainer"></div>
+  </div>
+  
+  <!-- Empty state message -->
+  <div id="emptyState" class="empty-state hidden">
+    <h3>No nodes found</h3>
+    <p>Try changing filter or search term</p>
+  </div>
+  
+  <!-- Bottom search bar -->
+  <div class="search-bar">
+    <input id="searchInput" type="text" placeholder="Søk node eller tag..." autocomplete="off">
+  </div>
+  
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // ==================== CONFIGURATION ====================
+    // API_KEY is injected by Flask from environment variable NODE_API_KEY
+    const API_KEY = 'REPLACE_ME_WITH_ENV_VAR';
+    const API_BASE_URL = `${window.location.protocol}//${window.location.hostname}:${window.location.port}`;  // Same port as web server
+    
+    // ==================== HELPER FUNCTIONS ====================
+    function getNodeStatus(lastHeardAgoSec) {
+      if (!lastHeardAgoSec && lastHeardAgoSec !== 0) return 'unknown';
+      if (lastHeardAgoSec < 1800) return 'online';      // < 30 minutes
+      if (lastHeardAgoSec < 7200) return 'recent';      // < 2 hours
+      if (lastHeardAgoSec < 1209600) return 'offline';  // < 14 days
+      return 'dead';  // >= 14 days
+    }
+    
+    function formatTimeAgo(seconds) {
+      if (!seconds && seconds !== 0) return 'Ukjent';
+      if (seconds < 60) return `${Math.floor(seconds)}s siden`;
+      if (seconds < 3600) return `${Math.floor(seconds / 60)}m siden`;
+      if (seconds < 86400) return `${Math.floor(seconds / 3600)}t siden`;
+      return `${Math.floor(seconds / 86400)}d siden`;
+    }
+    
+    // ==================== POD OVERLAY SYSTEM ====================
+    let activePodNode = null;
+    let activeLabelElement = null;
+    let lastZoomedNode = null;  // Track which node was last zoomed to
+    let liveUpdateInterval = null;  // Store interval ID for live updates
+    
+    function showPodOverlay(nodeId, marker, props) {
+      // Store active state
+      activePodNode = nodeId;
+      activeLabelElement = marker;
+      
+      // Get marker position on screen
+      const latlng = marker.getLatLng();
+      const point = map.latLngToContainerPoint(latlng);
+      
+      // Scale up the clicked marker (make it bigger and brighter)
+      marker.setStyle({
+        radius: 12,
+        weight: 4,
+        fillOpacity: 1
+      });
+      
+      // Dim other nodes
+      nodesLayer.eachLayer(layer => {
+        if (layer !== marker) {
+          layer.setStyle({
+            opacity: 0.2,
+            fillOpacity: 0.2
+          });
+        }
+      });
+      
+      // Show dimmed overlay
+      document.getElementById('mapDimmedOverlay').classList.add('active');
+      
+      // Create pods positioned around the marker
+      const pods = createPodsForNode(props, point.x, point.y);
+      
+      // Show overlay with pods
+      const overlay = document.getElementById('mapPodOverlay');
+      const container = document.getElementById('podContainer');
+      container.innerHTML = pods;
+      overlay.classList.add('active');
+      
+      // Add click handlers for clickable pods (tags, notes, address)
+      setTimeout(() => {
+        const clickablePods = container.querySelectorAll('.map-data-pod.clickable');
+        clickablePods.forEach(pod => {
+          pod.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const clickedNodeId = pod.getAttribute('data-nodeid');
+            console.log('Clickable pod clicked for node:', clickedNodeId);
+            
+            // Close pod overlay first
+            closePodOverlay();
+            
+            // Open edit modal
+            setTimeout(() => {
+              openDesktopEdit(clickedNodeId);
+            }, 300); // Wait for pod overlay to close
+          });
+        });
+      }, 100); // Wait for DOM update
+      
+      // Start live data updates (poll every 5 seconds)
+      startLiveDataUpdates(nodeId, marker);
+      
+      // Prevent map interactions while overlay is active
+      map.dragging.disable();
+      map.scrollWheelZoom.disable();
+    }
+    
+    function startLiveDataUpdates(nodeId, marker) {
+      // Clear any existing interval
+      if (liveUpdateInterval) {
+        clearInterval(liveUpdateInterval);
+      }
+      
+      // Update every 5 seconds
+      liveUpdateInterval = setInterval(async () => {
+        if (activePodNode !== nodeId) {
+          // Pod was closed, stop updates
+          clearInterval(liveUpdateInterval);
+          liveUpdateInterval = null;
+          return;
+        }
+        
+        try {
+          // Fetch fresh data from API
+          const response = await fetch(`${API_BASE_URL}/api/nodes?include_inactive=true`, {
+            headers: { 'X-API-Key': API_KEY },
+            cache: 'no-cache'
+          });
+          
+          if (!response.ok) throw new Error('API fetch failed');
+          
+          const data = await response.json();
+          const updatedNode = data.nodes.find(n => n.node_id === nodeId);
+          
+          if (!updatedNode) {
+            console.warn('Node not found in update:', nodeId);
+            return;
+          }
+          
+          // Check if GPS position changed
+          const oldLat = marker.getLatLng().lat;
+          const oldLng = marker.getLatLng().lng;
+          const newLat = updatedNode.latitude;
+          const newLng = updatedNode.longitude;
+          
+          if (newLat && newLng && (Math.abs(oldLat - newLat) > 0.00001 || Math.abs(oldLng - newLng) > 0.00001)) {
+            // GPS position changed - move marker on map!
+            const newLatLng = [newLat, newLng];
+            marker.setLatLng(newLatLng);
+            
+            // Recalculate pod positions (they orbit around the marker)
+            const point = map.latLngToContainerPoint(newLatLng);
+            updatePodPositions(updatedNode, point.x, point.y);
+            
+            console.log('📍 GPS updated for node:', nodeId, 'New position:', newLat, newLng);
+          } else {
+            // Just update pod content (telemetry, battery, etc.)
+            updatePodContent(updatedNode);
+          }
+          
+        } catch (error) {
+          console.error('Live update failed:', error);
+        }
+      }, 5000); // Poll every 5 seconds
+    }
+    
+    function updatePodPositions(props, centerX, centerY) {
+      // Regenerate pods with new positions
+      const pods = createPodsForNode(props, centerX, centerY);
+      const container = document.getElementById('podContainer');
+      container.innerHTML = pods;
+      
+      // Re-attach click handlers
+      setTimeout(() => {
+        const clickablePods = container.querySelectorAll('.map-data-pod.clickable');
+        clickablePods.forEach(pod => {
+          pod.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const clickedNodeId = pod.getAttribute('data-nodeid');
+            closePodOverlay();
+            setTimeout(() => openDesktopEdit(clickedNodeId), 300);
+          });
+        });
+      }, 100);
+    }
+    
+    function updatePodContent(props) {
+      // Update only the content of existing pods (positions stay same)
+      const container = document.getElementById('podContainer');
+      const pods = container.querySelectorAll('.map-data-pod');
+      
+      pods.forEach(pod => {
+        const title = pod.querySelector('.pod-title').textContent;
+        
+        // Update based on pod type
+        if (title.includes('Node')) {
+          // Update node info
+          const content = pod.querySelector('.pod-content');
+          const status = getNodeStatus(props.lastHeardAgoSec);
+          const statusColor = status === 'online' ? '#4CAF50' : status === 'recent' ? '#FF9800' : '#666';
+          content.innerHTML = `
+            <div><strong>${props.longName || props.shortName || props.nodeId}</strong></div>
+            <div style="font-size: 0.75em; color: #666;">${props.nodeId}</div>
+            <div style="font-size: 0.75em; margin-top: 4px;">
+              <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${statusColor}; margin-right: 4px;"></span>
+              ${status}
+            </div>
+          `;
+        } else if (title.includes('Miljø')) {
+          // Update environment data
+          if (props.temperature || props.relativeHumidity || props.barometricPressure) {
+            const content = pod.querySelector('.pod-content');
+            content.innerHTML = `
+              ${props.temperature ? `<div>🌡️ ${props.temperature.toFixed(1)}°C</div>` : ''}
+              ${props.relativeHumidity ? `<div>💧 ${props.relativeHumidity.toFixed(0)}%</div>` : ''}
+              ${props.barometricPressure ? `<div>🏔️ ${props.barometricPressure.toFixed(1)} hPa</div>` : ''}
+            `;
+          }
+        } else if (title.includes('Strøm')) {
+          // Update power data
+          if (props.batteryLevel || props.voltage || props.snr) {
+            const content = pod.querySelector('.pod-content');
+            content.innerHTML = `
+              ${props.batteryLevel ? `<div>🔋 ${props.batteryLevel}%</div>` : ''}
+              ${props.voltage ? `<div>⚡ ${props.voltage.toFixed(2)}V</div>` : ''}
+              ${props.snr ? `<div>📶 SNR: ${props.snr.toFixed(1)} dB</div>` : ''}
+            `;
+          }
+        } else if (title.includes('Nettverk')) {
+          // Update network data
+          if (props.channelUtil || props.airUtilTx || props.source) {
+            const content = pod.querySelector('.pod-content');
+            const sourceIcon = props.source === 'radio' ? '📡' : '🌐';
+            content.innerHTML = `
+              ${props.channelUtil ? `<div>📊 Ch: ${props.channelUtil.toFixed(1)}%</div>` : ''}
+              ${props.airUtilTx ? `<div>📤 TX: ${props.airUtilTx.toFixed(1)}%</div>` : ''}
+              ${props.source ? `<div>${sourceIcon} ${props.source}</div>` : ''}
+            `;
+          }
+        } else if (title.includes('Tid')) {
+          // Update time data
+          if (props.lastHeardNorwegian) {
+            const content = pod.querySelector('.pod-content');
+            content.innerHTML = `
+              <div>🕒 ${props.lastHeardNorwegian}</div>
+              ${props.lastHeardAgoSec ? `<div style="font-size: 0.85em; color: #666;">${formatTimeAgo(props.lastHeardAgoSec)}</div>` : ''}
+            `;
+          }
+        }
+        // Tags, Notes, Address don't need live updates (user must save changes)
+      });
+    }
+    
+    function closePodOverlay() {
+      // Stop live updates
+      if (liveUpdateInterval) {
+        clearInterval(liveUpdateInterval);
+        liveUpdateInterval = null;
+      }
+      
+      // Restore marker to normal size
+      if (activeLabelElement) {
+        activeLabelElement.setStyle({
+          radius: 8,
+          weight: 2,
+          fillOpacity: 0.8
+        });
+      }
+      
+      // Restore all nodes
+      nodesLayer.eachLayer(layer => {
+        if (layer.setStyle) {
+          layer.setStyle({
+            opacity: 1,
+            fillOpacity: 0.8
+          });
+        }
+      });
+      
+      // Hide overlays
+      document.getElementById('mapDimmedOverlay').classList.remove('active');
+      document.getElementById('mapPodOverlay').classList.remove('active');
+      
+      // Clear pods
+      document.getElementById('podContainer').innerHTML = '';
+      
+      // Re-enable map interactions
+      map.dragging.enable();
+      map.scrollWheelZoom.enable();
+      
+      // Clear active state
+      activePodNode = null;
+      activeLabelElement = null;
+      
+      // Don't reset lastZoomedNode here - allow re-clicking same node
+    }
+    
+    function createPodsForNode(props, centerX, centerY) {
+      const radius = 140; // Distance from center (reduced from 200 for tighter grouping)
+      const pods = [];
+      
+      // Check which pods have data
+      const hasNodeInfo = true; // Always show node name/ID
+      const hasEnvironment = props.temperature || props.relativeHumidity || props.barometricPressure;
+      const hasPower = props.batteryLevel || props.voltage || props.snr;
+      const hasNetwork = props.channelUtil || props.airUtilTx || props.source;
+      const hasWeather = props.windSpeed || props.windDirection || props.altitude;
+      const hasAirQuality = props.pm25Standard || props.pm10Standard || props.iaq;
+      const hasTime = props.lastHeardNorwegian || props.lastHeardAgoSec;
+      const hasTags = props.tags && props.tags.length > 0;
+      const hasNotes = props.notes && props.notes.trim().length > 0;
+      const hasAddress = props.customLabel && props.customLabel.trim().length > 0;
+      
+      // Edit pods always show (tags, notes, address)
+      const alwaysShowTags = true;
+      const alwaysShowNotes = true;
+      const alwaysShowAddress = true;
+      
+      let podIndex = 0;
+      const podCount = [hasNodeInfo, hasEnvironment, hasPower, hasNetwork, hasWeather, hasAirQuality, hasTime, alwaysShowTags, alwaysShowNotes, alwaysShowAddress].filter(Boolean).length;
+      const angleStep = 360 / podCount;
+      
+      // Node Info Pod - Always first (shows name and ID)
+      if (hasNodeInfo) {
+        const angle = podIndex * angleStep - 90; // Start at top
+        const x = centerX + radius * Math.cos(angle * Math.PI / 180);
+        const y = centerY + radius * Math.sin(angle * Math.PI / 180);
+        pods.push(`
+          <div class="map-data-pod info" style="left: ${x}px; top: ${y}px; transform: translate(-50%, -50%);">
+            <div class="pod-title">📍 Node</div>
+            <div class="pod-content">
+              <div><strong>${props.longName || props.shortName || props.nodeId}</strong></div>
+              <div style="font-size: 0.75em; color: #666;">${props.nodeId}</div>
+              <div style="font-size: 0.75em; margin-top: 4px;">
+                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${props.status === 'online' ? '#4CAF50' : props.status === 'recent' ? '#FF9800' : '#666'}; margin-right: 4px;"></span>
+                ${props.status}
+              </div>
+            </div>
+          </div>
+        `);
+        podIndex++;
+      }
+      
+      // Tags Pod - Always show (clickable to edit)
+      if (alwaysShowTags) {
+        const angle = podIndex * angleStep - 90;
+        const x = centerX + radius * Math.cos(angle * Math.PI / 180);
+        const y = centerY + radius * Math.sin(angle * Math.PI / 180);
+        
+        if (hasTags) {
+          const tagsList = props.tags.map(t => `<span style="background: #e3f2fd; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; margin: 2px; display: inline-block;">${t.tag}</span>`).join('');
+          pods.push(`
+            <div class="map-data-pod tags clickable" data-nodeid="${props.nodeId}" style="left: ${x}px; top: ${y}px; transform: translate(-50%, -50%); cursor: pointer;">
+              <div class="pod-title">🏷️ Tags</div>
+              <div class="pod-content">
+                ${tagsList}
+                <div style="font-size: 0.75em; color: #666; margin-top: 4px;">Klikk for å redigere</div>
+              </div>
+            </div>
+          `);
+        } else {
+          // Empty state - show placeholder
+          pods.push(`
+            <div class="map-data-pod tags clickable empty" data-nodeid="${props.nodeId}" style="left: ${x}px; top: ${y}px; transform: translate(-50%, -50%); cursor: pointer; opacity: 0.7;">
+              <div class="pod-title">🏷️ Tags</div>
+              <div class="pod-content">
+                <div style="font-size: 0.85em; color: #999; font-style: italic;">Ingen tags</div>
+                <div style="font-size: 0.75em; color: #666; margin-top: 4px;">Klikk for å legge til</div>
+              </div>
+            </div>
+          `);
+        }
+        podIndex++;
+      }
+      
+      // Notes Pod - Always show (clickable to edit)
+      if (alwaysShowNotes) {
+        const angle = podIndex * angleStep - 90;
+        const x = centerX + radius * Math.cos(angle * Math.PI / 180);
+        const y = centerY + radius * Math.sin(angle * Math.PI / 180);
+        
+        if (hasNotes) {
+          const truncatedNotes = props.notes.length > 50 ? props.notes.substring(0, 50) + '...' : props.notes;
+          pods.push(`
+            <div class="map-data-pod notes clickable" data-nodeid="${props.nodeId}" style="left: ${x}px; top: ${y}px; transform: translate(-50%, -50%); cursor: pointer;">
+              <div class="pod-title">📝 Notater</div>
+              <div class="pod-content">
+                <div style="font-size: 0.85em; line-height: 1.3;">${truncatedNotes}</div>
+                <div style="font-size: 0.75em; color: #666; margin-top: 4px;">Klikk for å redigere</div>
+              </div>
+            </div>
+          `);
+        } else {
+          // Empty state - show placeholder
+          pods.push(`
+            <div class="map-data-pod notes clickable empty" data-nodeid="${props.nodeId}" style="left: ${x}px; top: ${y}px; transform: translate(-50%, -50%); cursor: pointer; opacity: 0.7;">
+              <div class="pod-title">📝 Notater</div>
+              <div class="pod-content">
+                <div style="font-size: 0.85em; color: #999; font-style: italic;">Ingen notater</div>
+                <div style="font-size: 0.75em; color: #666; margin-top: 4px;">Klikk for å legge til</div>
+              </div>
+            </div>
+          `);
+        }
+        podIndex++;
+      }
+      
+      // Address Pod - Always show (clickable to edit)
+      if (alwaysShowAddress) {
+        const angle = podIndex * angleStep - 90;
+        const x = centerX + radius * Math.cos(angle * Math.PI / 180);
+        const y = centerY + radius * Math.sin(angle * Math.PI / 180);
+        
+        if (hasAddress) {
+          pods.push(`
+            <div class="map-data-pod address clickable" data-nodeid="${props.nodeId}" style="left: ${x}px; top: ${y}px; transform: translate(-50%, -50%); cursor: pointer;">
+              <div class="pod-title">🏠 Adresse</div>
+              <div class="pod-content">
+                <div style="font-size: 0.85em; line-height: 1.3;">${props.customLabel}</div>
+                <div style="font-size: 0.75em; color: #666; margin-top: 4px;">Klikk for å redigere</div>
+              </div>
+            </div>
+          `);
+        } else {
+          // Empty state - show placeholder
+          pods.push(`
+            <div class="map-data-pod address clickable empty" data-nodeid="${props.nodeId}" style="left: ${x}px; top: ${y}px; transform: translate(-50%, -50%); cursor: pointer; opacity: 0.7;">
+              <div class="pod-title">🏠 Adresse</div>
+              <div class="pod-content">
+                <div style="font-size: 0.85em; color: #999; font-style: italic;">Ingen adresse</div>
+                <div style="font-size: 0.75em; color: #666; margin-top: 4px;">Klikk for å legge til</div>
+              </div>
+            </div>
+          `);
+        }
+        podIndex++;
+      }
+      
+      // Environment Pod
+      if (hasEnvironment) {
+        const angle = podIndex * angleStep - 90;
+        const x = centerX + radius * Math.cos(angle * Math.PI / 180);
+        const y = centerY + radius * Math.sin(angle * Math.PI / 180);
+        pods.push(`
+          <div class="map-data-pod environment" style="left: ${x}px; top: ${y}px; transform: translate(-50%, -50%);">
+            <div class="pod-title">🌡️ Miljø</div>
+            <div class="pod-content">
+              ${props.temperature ? `<div><strong>Temp:</strong> ${props.temperature.toFixed(1)}°C</div>` : ''}
+              ${props.relativeHumidity ? `<div><strong>Fukt:</strong> ${props.relativeHumidity.toFixed(1)}%</div>` : ''}
+              ${props.barometricPressure ? `<div><strong>Trykk:</strong> ${props.barometricPressure.toFixed(1)} hPa</div>` : ''}
+            </div>
+          </div>
+        `);
+        podIndex++;
+      }
+      
+      // Power Pod
+      if (hasPower) {
+        const angle = podIndex * angleStep - 90;
+        const x = centerX + radius * Math.cos(angle * Math.PI / 180);
+        const y = centerY + radius * Math.sin(angle * Math.PI / 180);
+        pods.push(`
+          <div class="map-data-pod power" style="left: ${x}px; top: ${y}px; transform: translate(-50%, -50%);">
+            <div class="pod-title">🔋 Kraft</div>
+            <div class="pod-content">
+              ${props.batteryLevel ? `<div><strong>Batteri:</strong> ${props.batteryLevel}%</div>` : ''}
+              ${props.voltage ? `<div><strong>Spenning:</strong> ${props.voltage.toFixed(2)}V</div>` : ''}
+              ${props.snr ? `<div><strong>SNR:</strong> ${props.snr} dB</div>` : ''}
+            </div>
+          </div>
+        `);
+        podIndex++;
+      }
+      
+      // Network Pod
+      if (hasNetwork) {
+        const angle = podIndex * angleStep - 90;
+        const x = centerX + radius * Math.cos(angle * Math.PI / 180);
+        const y = centerY + radius * Math.sin(angle * Math.PI / 180);
+        pods.push(`
+          <div class="map-data-pod network" style="left: ${x}px; top: ${y}px; transform: translate(-50%, -50%);">
+            <div class="pod-title">📡 Nettverk</div>
+            <div class="pod-content">
+              ${props.channelUtil ? `<div><strong>Kanal:</strong> ${props.channelUtil.toFixed(1)}%</div>` : ''}
+              ${props.airUtilTx ? `<div><strong>Air TX:</strong> ${props.airUtilTx.toFixed(1)}%</div>` : ''}
+              <div><strong>Kilde:</strong> ${props.source || 'ukjent'}</div>
+            </div>
+          </div>
+        `);
+        podIndex++;
+      }
+      
+      // Info Pod (Always show)
+      const angle = podIndex * angleStep - 90;
+      const x = centerX + radius * Math.cos(angle * Math.PI / 180);
+      const y = centerY + radius * Math.sin(angle * Math.PI / 180);
+      pods.push(`
+        <div class="map-data-pod info" style="left: ${x}px; top: ${y}px; transform: translate(-50%, -50%);">
+          <div class="pod-title">ℹ️ Info</div>
+          <div class="pod-content">
+            <div><strong>ID:</strong> ${props.nodeId}</div>
+            <div><strong>HW:</strong> ${props.hwModel || 'Ukjent'}</div>
+            <div><strong>Rolle:</strong> ${props.role || 'CLIENT'}</div>
+          </div>
+        </div>
+      `);
+      podIndex++;
+      
+      // Time Pod
+      if (hasTime) {
+        const angle = podIndex * angleStep - 90;
+        const x = centerX + radius * Math.cos(angle * Math.PI / 180);
+        const y = centerY + radius * Math.sin(angle * Math.PI / 180);
+        pods.push(`
+          <div class="map-data-pod info" style="left: ${x}px; top: ${y}px; transform: translate(-50%, -50%);">
+            <div class="pod-title">🕐 Tid</div>
+            <div class="pod-content">
+              <div><strong>Sist sett:</strong></div>
+              <div style="font-size: 0.9em;">${props.lastHeardNorwegian || 'N/A'}</div>
+              <div><strong>For:</strong> ${props.lastHeardAgoSec ? formatDuration(props.lastHeardAgoSec) : 'N/A'}</div>
+            </div>
+          </div>
+        `);
+      }
+      
+      return pods.join('');
+    }
+    
+    // Initialize map - will auto-zoom to show all nodes on load
+    const map = L.map('map', {
+      zoomControl: false,  // Disable zoom buttons (+/-), use scroll/pinch instead
+      attributionControl: true
+    }).setView([50, 10], 4);  // Start with Europe view, will auto-adjust
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap',
+      maxZoom: 18
+    }).addTo(map);
+    
+    // Handle label visibility on zoom
+    map.on('zoomend', function() {
+      const zoom = map.getZoom();
+      // Re-render nodes to update label visibility based on new zoom level
+      renderNodes();
+    });
+    
+    let nodesLayer = L.featureGroup().addTo(map);
+    let trailsLayer = L.layerGroup().addTo(map);
+    let allNodes = [];
+    let favorites = new Set();
+    let activeFilter = null;
+    let isFirstLoad = true;
+    // Source filters - Radio (USB/WiFi) and MQTT
+    let sourceFilters = {
+      radio: true,
+      mqtt: true
+    };
+    // Auto-refresh and live update state
+    let autoRefreshInterval = null;
+    let isEditingNode = false;
+    let activeNodeId = null;
+    
+    // Edit modal state - MUST be declared early for handleEditClick
+    let currentMobileNodeId = null;
+    let currentDesktopNodeId = null;
+    
+    // Hide loading after map loads
+    map.whenReady(() => {
+      document.getElementById('loading').classList.add('hidden');
+    });
+    
+    // ==================== KEYBOARD SHORTCUTS ====================
+    document.addEventListener('keydown', function(e) {
+      // ESC key closes pod overlay
+      if (e.key === 'Escape' && activePodNode) {
+        closePodOverlay();
+      }
+    });
+    
+    // Click dimmed overlay to close
+    document.getElementById('mapDimmedOverlay').addEventListener('click', function() {
+      closePodOverlay();
+    });
+    
+    // Reset zoom tracking when map is moved significantly or zoomed out
+    map.on('zoomend', function() {
+      if (map.getZoom() < 14) {
+        lastZoomedNode = null;  // Reset when zooming out
+      }
+    });
+    
+    map.on('moveend', function() {
+      // Reset if moved far from zoomed node (helps prevent confusion)
+      if (lastZoomedNode && !activePodNode) {
+        // Could add distance check here if needed
+      }
+    });
+    
+    // ==================== DROPDOWN MANAGEMENT ====================
+    
+    // Toggle dropdown visibility
+    function toggleDropdown(menuId) {
+      const menu = document.getElementById(menuId);
+      const isOpen = menu.classList.contains('show');
+      
+      // Close all dropdowns first
+      closeAllDropdowns();
+      
+      // Toggle this dropdown
+      if (!isOpen) {
+        menu.classList.add('show');
+      }
+    }
+    
+    // Close all dropdowns
+    function closeAllDropdowns() {
+      document.querySelectorAll('.dropdown-menu').forEach(menu => {
+        menu.classList.remove('show');
+      });
+    }
+    
+    // Setup dropdown triggers
+    document.getElementById('favDropdownTrigger').addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleDropdown('favDropdownMenu');
+    });
+    
+    document.getElementById('statusDropdownTrigger').addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleDropdown('statusDropdownMenu');
+    });
+    
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.dropdown-container')) {
+        closeAllDropdowns();
+      }
+    });
+    
+    // Handle status filter clicks
+    document.getElementById('statusDropdownMenu').addEventListener('click', (e) => {
+      const item = e.target.closest('.dropdown-item');
+      if (item) {
+        const filter = item.dataset.filter;
+        if (filter) {
+          // "all" always clears the filter
+          if (filter === 'all') {
+            activeFilter = null;
+          } else {
+            // Toggle other filters
+            activeFilter = activeFilter === filter ? null : filter;
+          }
+          
+          // Update trigger appearance
+          const trigger = document.getElementById('statusDropdownTrigger');
+          if (activeFilter && activeFilter !== 'all') {
+            trigger.classList.add('active');
+          } else {
+            trigger.classList.remove('active');
+          }
+          
+          renderNodes();
+          closeAllDropdowns();
+          
+          // Auto-zoom to filtered/all nodes
+          setTimeout(() => {
+            if (nodesLayer.getLayers().length > 0) {
+              const bounds = nodesLayer.getBounds();
+              if (bounds.isValid()) {
+                const layerCount = nodesLayer.getLayers().length;
+                console.log(`Zooming to ${layerCount} nodes (filter: ${activeFilter || 'all'})`);
+                map.fitBounds(bounds, { 
+                  padding: [50, 50],
+                  maxZoom: 15,
+                  animate: true,
+                  duration: 0.8 
+                });
+              } else {
+                console.warn('Invalid bounds for nodes');
+              }
+            }
+          }, 500);
+        }
+      }
+    });
+    
+    // Reset view
+    function resetView() {
+      activeFilter = null;
+      document.getElementById('searchInput').value = '';
+      document.getElementById('statusDropdownTrigger').classList.remove('active');
+      closeAllDropdowns();
+      
+      // Re-enable auto-refresh when resetting
+      isEditingNode = false;
+      startAutoRefresh();
+      
+      renderNodes();
+      
+      // Zoom to show all nodes
+      if (nodesLayer.getLayers().length > 0) {
+        const bounds = nodesLayer.getBounds();
+        if (bounds.isValid()) {
+          map.fitBounds(bounds, { padding: [50, 50] });
+        }
+      } else {
+        // Fallback to Europe view if no nodes
+        map.setView([50, 10], 4);
+      }
+    }
+    
+    // Auto-refresh control functions
+    function startAutoRefresh() {
+      if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+      }
+      
+      autoRefreshInterval = setInterval(() => {
+        if (!isEditingNode) {  // Only refresh if not editing
+          loadNodes();
+          // loadTrails() removed - will be re-implemented with historical GPS data from database
+        }
+      }, 60000); // Update every minute
+    }
+    
+    function stopAutoRefresh() {
+      if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
+      }
+    }
+    
+    function pauseAutoRefresh() {
+      isEditingNode = true;
+    }
+    
+    function resumeAutoRefresh() {
+      isEditingNode = false;
+    }
+    
+    // Live updates for active node
+    function startLiveNodeUpdate(nodeId) {
+      activeNodeId = nodeId;
+      // Update every 10 seconds for live data
+      liveUpdateInterval = setInterval(() => {
+        updateActiveNodeData(nodeId);
+      }, 10000);
+      
+      // Initial update
+      setTimeout(() => updateActiveNodeData(nodeId), 1000);
+    }
+    
+    function stopLiveNodeUpdate() {
+      // Hide live indicator
+      if (activeNodeId) {
+        const liveIndicator = document.getElementById(`live-indicator-${activeNodeId}`);
+        if (liveIndicator) {
+          liveIndicator.style.display = 'none';
+        }
+      }
+      
+      activeNodeId = null;
+      if (liveUpdateInterval) {
+        clearInterval(liveUpdateInterval);
+        liveUpdateInterval = null;
+      }
+    }
+    
+    async function updateActiveNodeData(nodeId) {
+      if (!activeNodeId || activeNodeId !== nodeId) return;
+      
+      try {
+        // Fetch updated node data
+        const response = await fetch(`${API_BASE_URL}/nodes.geojson`);
+        const data = await response.json();
+        
+        // Find the specific node
+        const updatedNode = data.features.find(f => f.properties.nodeId === nodeId);
+        if (!updatedNode) return;
+        
+        const props = updatedNode.properties;
+        
+        // Show live indicator
+        const liveIndicator = document.getElementById(`live-indicator-${nodeId}`);
+        if (liveIndicator) {
+          liveIndicator.style.display = 'block';
+          // Flash effect
+          liveIndicator.style.opacity = '1';
+          setTimeout(() => {
+            if (liveIndicator) liveIndicator.style.opacity = '0.7';
+          }, 500);
+        }
+        
+        // Update telemetry table in popup
+        const telemetryTable = document.getElementById(`telemetry-table-${nodeId}`);
+        if (telemetryTable) {
+          const telemetryRows = [
+            ['Batteri', props.batteryLevel ? `${props.batteryLevel}%` : 'N/A'],
+            ['Spenning', props.voltage ? `${props.voltage.toFixed(2)}V` : 'N/A'],
+            ['SNR (vår måling)', props.snr ? `${props.snr} dB` : 'N/A'],
+            ['Høyde', props.altitude ? `${Math.round(props.altitude)}m` : 'N/A'],
+            ['Kanal util.', props.channelUtil ? `${props.channelUtil.toFixed(1)}%` : 'N/A'],
+            ['Air util. TX', props.airUtilTx ? `${props.airUtilTx.toFixed(1)}%` : 'N/A'],
+            ['Sist sett', props.lastHeardNorwegian || 'N/A'],
+            ['For', props.lastHeardAgoSec ? formatDuration(props.lastHeardAgoSec) : 'N/A']
+          ];
+          
+          // Update only telemetry rows (skip basic info and separators)
+          const rows = telemetryTable.querySelectorAll('tr');
+          let telemetryStartIndex = -1;
+          
+          // Find where telemetry data starts (after first separator)
+          for (let i = 0; i < rows.length; i++) {
+            const thElement = rows[i].querySelector('th');
+            if (thElement && thElement.textContent === 'Batteri:') {
+              telemetryStartIndex = i;
+              break;
+            }
+          }
+          
+          if (telemetryStartIndex >= 0) {
+            telemetryRows.forEach(([key, val], index) => {
+              const rowIndex = telemetryStartIndex + index;
+              if (rows[rowIndex] && val !== 'N/A') {
+                const tdElement = rows[rowIndex].querySelector('td');
+                if (tdElement) {
+                  tdElement.textContent = val;
+                  // Flash effect for updated values
+                  tdElement.style.backgroundColor = '#e8f5e8';
+                  setTimeout(() => {
+                    if (tdElement) tdElement.style.backgroundColor = '';
+                  }, 1000);
+                }
+              }
+            });
+          }
+        }
+        
+        // Update mobile modal if open
+        if (currentMobileNodeId === nodeId) {
+          updateMobileTelemetryData(props);
+        }
+        
+        // Update edit mode telemetry if visible
+        const editSection = document.getElementById(`edit-section-${nodeId}`);
+        if (editSection && editSection.style.display !== 'none') {
+          updateEditModeTelemetry(nodeId, props);
+        }
+        
+        // Update desktop modal telemetry if open
+        if (currentDesktopNodeId === nodeId) {
+          updateDesktopTelemetryData(props);
+        }
+        
+      } catch (error) {
+        console.log('Live update failed:', error);
+      }
+    }
+    
+    function updateEditModeTelemetry(nodeId, props) {
+      // Update individual telemetry fields in edit mode
+      const fields = [
+        ['edit-battery', props.batteryLevel ? `${props.batteryLevel}%` : 'N/A'],
+        ['edit-voltage', props.voltage ? `${props.voltage.toFixed(2)}V` : 'N/A'],
+        ['edit-snr', props.snr ? `${props.snr} dB` : 'N/A'],
+        ['edit-altitude', props.altitude ? `${Math.round(props.altitude)}m` : 'N/A'],
+        ['edit-channel', props.channelUtil ? `${props.channelUtil.toFixed(1)}%` : 'N/A'],
+        ['edit-air', props.airUtilTx ? `${props.airUtilTx.toFixed(1)}%` : 'N/A'],
+        ['edit-lastheard', props.lastHeardNorwegian || 'N/A'],
+        ['edit-ago', props.lastHeardAgoSec ? `(${formatDuration(props.lastHeardAgoSec)})` : '']
+      ];
+      
+      fields.forEach(([fieldId, value]) => {
+        const element = document.getElementById(`${fieldId}-${nodeId}`);
+        if (element && element.textContent !== value) {
+          element.textContent = value;
+          // Flash effect for updated values
+          element.style.backgroundColor = '#e8f5e8';
+          setTimeout(() => {
+            if (element) element.style.backgroundColor = '';
+          }, 1000);
+        }
+      });
+    }
+    
+    function updateMobileTelemetryData(props) {
+      console.log('updateMobileTelemetryData called with:', props);
+      
+      // Update mobile position info
+      const posInfo = document.getElementById('mobilePositionInfo');
+      const removeBtn = document.getElementById('mobileRemovePositionBtn');
+      
+      if (props.positionSource === 'manual') {
+        posInfo.innerHTML = `
+          <div style="font-weight: 600; margin-bottom: 4px;">Manuell posisjon:</div>
+          <div style="font-family: monospace; color: #333;">${props.latitude && props.longitude ? `${props.latitude.toFixed(6)}, ${props.longitude.toFixed(6)}` : 'Ikke satt'}</div>
+          ${props.altitude ? `<div style="color: #666;">Høyde: ${props.altitude}m</div>` : ''}
+          ${props.manualAddress ? `<div style="color: #666;">${props.manualAddress}</div>` : ''}
+        `;
+        removeBtn.style.display = 'block';
+      } else if (props.positionSource === 'gps') {
+        posInfo.innerHTML = `
+          <div style="font-weight: 600; margin-bottom: 4px;">GPS posisjon:</div>
+          <div style="font-family: monospace; color: #333;">${props.latitude && props.longitude ? `${props.latitude.toFixed(6)}, ${props.longitude.toFixed(6)}` : 'Ikke satt'}</div>
+          ${props.altitude ? `<div style="color: #666;">Høyde: ${props.altitude}m</div>` : ''}
+          <div style="color: #4CAF50; font-size: 0.85em; margin-top: 4px;">📡 Fra GPS</div>
+        `;
+        removeBtn.style.display = 'none';
+      } else {
+        posInfo.innerHTML = '<div style="color: #999;">Ingen posisjon</div>';
+        removeBtn.style.display = 'none';
+      }
+      
+      // Update mobile telemetry fields
+      const mobileFields = [
+        // Temperature & Environment
+        ['mobile-temperature', props.temperature ? `${props.temperature.toFixed(1)}°C` : 'N/A'],
+        ['mobile-humidity', props.humidity ? `${props.humidity.toFixed(1)}%` : 'N/A'],
+        ['mobile-pressure', props.pressure ? `${props.pressure.toFixed(1)} hPa` : 'N/A'],
+        ['mobile-gas_resistance', props.gas_resistance ? `${props.gas_resistance.toFixed(0)} Ω` : 'N/A'],
+        
+        // Power & Battery
+        ['mobile-battery', props.batteryLevel ? `${props.batteryLevel}%` : 'N/A'],
+        ['mobile-voltage', props.voltage ? `${props.voltage.toFixed(2)}V` : 'N/A'],
+        ['mobile-current', props.current ? `${props.current.toFixed(0)}mA` : 'N/A'],
+        ['mobile-power', props.power ? `${props.power.toFixed(1)}W` : 'N/A'],
+        
+        // Air Quality
+        ['mobile-pm10_standard', props.pm10_standard ? `${props.pm10_standard} μg/m³` : 'N/A'],
+        ['mobile-pm25_standard', props.pm25_standard ? `${props.pm25_standard} μg/m³` : 'N/A'],
+        ['mobile-pm100_standard', props.pm100_standard ? `${props.pm100_standard} μg/m³` : 'N/A'],
+        ['mobile-iaq', props.iaq ? `${props.iaq}` : 'N/A'],
+        
+        // Weather & Outdoor
+        ['mobile-wind_direction', props.wind_direction ? `${props.wind_direction}°` : 'N/A'],
+        ['mobile-wind_speed', props.wind_speed ? `${props.wind_speed.toFixed(1)} m/s` : 'N/A'],
+        ['mobile-rain_hourly', props.rain_hourly ? `${props.rain_hourly.toFixed(1)} mm` : 'N/A'],
+        ['mobile-uv_index', props.uv_index ? `${props.uv_index}` : 'N/A'],
+        
+        // Light & Sensors
+        ['mobile-lux', props.lux ? `${props.lux.toFixed(0)} lx` : 'N/A'],
+        ['mobile-pir', props.pir ? (props.pir ? 'Aktivert' : 'Ikke aktivert') : 'N/A'],
+        ['mobile-ambient_light', props.ambient_light ? `${props.ambient_light.toFixed(0)} lx` : 'N/A'],
+        ['mobile-solar_irradiance', props.solar_irradiance ? `${props.solar_irradiance.toFixed(1)} W/m²` : 'N/A'],
+        
+        // Network & Connectivity
+        ['mobile-snr', props.snr ? `${props.snr} dB` : 'N/A'],
+        ['mobile-altitude', props.altitude ? `${Math.round(props.altitude)}m` : 'N/A'],
+        ['mobile-channel_utilization', props.channelUtil ? `${props.channelUtil.toFixed(1)}%` : 'N/A'],
+        ['mobile-air_util_tx', props.airUtilTx ? `${props.airUtilTx.toFixed(1)}%` : 'N/A'],
+        
+        ['mobile-lastheard', props.lastHeardNorwegian || 'N/A'],
+        ['mobile-ago', props.lastHeardAgoSec ? `(${formatDuration(props.lastHeardAgoSec)})` : '']
+      ];
+      
+      mobileFields.forEach(([fieldId, value]) => {
+        const element = document.getElementById(fieldId);
+        console.log('Updating mobile field:', fieldId, 'Element found:', !!element, 'Value:', value);
+        if (element && element.textContent !== value) {
+          element.textContent = value;
+          // Flash effect for updated values
+          element.style.backgroundColor = '#e8f5e8';
+          setTimeout(() => {
+            if (element) element.style.backgroundColor = '';
+          }, 1000);
+        }
+      });
+    }
+    
+    // Update favorites dropdown
+    function updateFavoritesBar() {
+      const menu = document.getElementById('favDropdownMenu');
+      const countBadge = document.getElementById('count-fav');
+      const favNodes = allNodes.filter(f => favorites.has(f.properties.nodeId));
+      
+      countBadge.textContent = favNodes.length;
+      
+      if (favNodes.length === 0) {
+        menu.innerHTML = '<div class="dropdown-empty">Ingen favoritter ennå</div>';
+        return;
+      }
+      
+      let html = '';
+      favNodes.forEach(f => {
+        const props = f.properties;
+        const name = props.longName || props.nodeId;
+        html += `
+          <div class="dropdown-item" onclick="zoomToNode('${props.nodeId}'); closeAllDropdowns();">
+            <span class="item-name">${name}</span>
+            <span class="remove-btn" onclick="event.stopPropagation(); removeFavorite('${props.nodeId}')">✕</span>
+          </div>`;
+      });
+      menu.innerHTML = html;
+    }
+    
+    // Zoom to specific node
+    function zoomToNode(nodeId) {
+      const node = allNodes.find(f => f.properties.nodeId === nodeId);
+      if (node && node.geometry.coordinates) {
+        map.setView([node.geometry.coordinates[1], node.geometry.coordinates[0]], 14);
+        // Open popup
+        nodesLayer.eachLayer(layer => {
+          if (layer.getPopup && layer.getPopup()) {
+            const content = layer.getPopup().getContent();
+            if (content.includes(nodeId)) {
+              layer.openPopup();
+            }
+          }
+        });
+      }
+    }
+    
+    // Remove favorite
+    function removeFavorite(nodeId) {
+      favorites.delete(nodeId);
+      localStorage.setItem('favorites', JSON.stringify([...favorites]));
+      updateFavoritesBar();
+      renderNodes();
+      loadNodes();
+    }
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap',
+      maxZoom: 18
+    }).addTo(map);
+    
+    // Hide loading after map loads
+    map.whenReady(() => {
+      document.getElementById('loading').classList.add('hidden');
+    });
+    
+    function createPopupContent(props) {
+      // Use orbital layout for a revolutionary new experience
+      return createOrbitalPopupContent(props);
+    }
+    
+    function createOrbitalPopupContent(props) {
+      const isFav = props.isFavorite;
+      
+      // Status indicator
+      let statusColor = '#999';
+      let statusText = 'Ukjent';
+      if (props.status === 'online') {
+        statusColor = '#4CAF50';
+        statusText = 'Online';
+      } else if (props.status === 'recent') {
+        statusColor = '#FFA726';
+        statusText = 'Nylig aktiv';
+      } else if (props.status === 'offline') {
+        statusColor = '#999';
+        statusText = 'Offline';
+      }
+      
+      // Helper function to check if a pod has any real data (not just N/A)
+      function hasData(values) {
+        return values.some(v => v !== null && v !== undefined && v !== '' && v !== 'ukjent');
+      }
+      
+      // Check which pods have actual data
+      const hasEnvironment = hasData([props.temperature, props.relativeHumidity, props.barometricPressure]);
+      const hasPower = hasData([props.batteryLevel, props.voltage, props.snr]);
+      const hasNetwork = hasData([props.channelUtil, props.airUtilTx]) || props.source; // Source always available
+      const hasWeather = hasData([props.windSpeed, props.windDirection, props.altitude]);
+      const hasAirQuality = hasData([props.pm25Standard, props.pm10Standard, props.iaq]);
+      const hasInfo = true; // Always show info (nodeId, hwModel, role)
+      const hasTime = hasData([props.lastHeardNorwegian, props.lastHeardAgoSec]);
+      
+      // Check if node has GPS position for trail toggle
+      const hasPosition = props.latitude && props.longitude;
+      
+      return `
+        <div class="orbital-popup-container">
+          <!-- Central Node with Edit Icon -->
+          <div class="orbital-center" 
+               style="background: linear-gradient(135deg, ${statusColor}, #2196F3); cursor: pointer; position: relative;" 
+               onclick="handleEditClick('${props.nodeId}')"
+               title="Klikk for å redigere node">
+            <div class="node-name" style="font-size: 0.95em; font-weight: bold;">${props.longName || props.shortName || props.nodeId.slice(-4)}</div>
+            <div class="node-id" style="font-size: 0.75em; margin-top: 2px;">${statusText}</div>
+            ${hasPosition ? '<div style="font-size: 0.7em; margin-top: 2px;">📍 GPS Aktiv</div>' : ''}
+          </div>
+          
+          <!-- Environment Pod (Top) - Only show if has data -->
+          ${hasEnvironment ? `
+          <div class="orbital-data-pod environment" style="top: 20px; left: 50%; transform: translateX(-50%);">
+            <div class="pod-title">🌡️ Miljø</div>
+            <div class="pod-content">
+              <div><strong>Temp:</strong> ${props.temperature ? `${props.temperature.toFixed(1)}°C` : 'N/A'}</div>
+              <div><strong>Fukt:</strong> ${props.relativeHumidity ? `${props.relativeHumidity.toFixed(1)}%` : 'N/A'}</div>
+              <div><strong>Trykk:</strong> ${props.barometricPressure ? `${props.barometricPressure.toFixed(1)} hPa` : 'N/A'}</div>
+            </div>
+          </div>
+          ` : ''}
+          
+          <!-- Power Pod (Top Right - 45°) - Only show if has data -->
+          ${hasPower ? `
+          <div class="orbital-data-pod power" style="top: calc(50% - var(--orbital-radius) * 0.707); right: calc(50% - var(--orbital-radius) * 0.707); transform: translate(50%, -50%);">
+            <div class="pod-title">🔋 Kraft</div>
+            <div class="pod-content">
+              <div><strong>Batteri:</strong> ${props.batteryLevel ? `${props.batteryLevel}%` : 'N/A'}</div>
+              <div><strong>Spenning:</strong> ${props.voltage ? `${props.voltage.toFixed(2)}V` : 'N/A'}</div>
+              <div><strong>SNR:</strong> ${props.snr ? `${props.snr} dB` : 'N/A'}</div>
+            </div>
+          </div>
+          ` : ''}
+          
+          <!-- Network Pod (Right - 90°) - Only show if has data -->
+          ${hasNetwork ? `
+          <div class="orbital-data-pod network" style="top: 50%; right: calc(50% - var(--orbital-radius)); transform: translate(50%, -50%);">
+            <div class="pod-title">📡 Nettverk</div>
+            <div class="pod-content">
+              ${props.channelUtil ? `<div><strong>Kanal:</strong> ${props.channelUtil.toFixed(1)}%</div>` : ''}
+              ${props.airUtilTx ? `<div><strong>Air TX:</strong> ${props.airUtilTx.toFixed(1)}%</div>` : ''}
+              <div><strong>Kilde:</strong> ${props.source || 'ukjent'}</div>
+            </div>
+          </div>
+          ` : ''}
+          
+          <!-- Weather Pod (Bottom Right - 135°) - Only show if has data -->
+          ${hasWeather ? `
+          <div class="orbital-data-pod weather" style="bottom: calc(50% - var(--orbital-radius) * 0.707); right: calc(50% - var(--orbital-radius) * 0.707); transform: translate(50%, 50%);">
+            <div class="pod-title">☀️ Vær</div>
+            <div class="pod-content">
+              ${props.windSpeed ? `<div><strong>Vind:</strong> ${props.windSpeed.toFixed(1)} m/s</div>` : ''}
+              ${props.windDirection ? `<div><strong>Retning:</strong> ${props.windDirection}°</div>` : ''}
+              ${props.altitude ? `<div><strong>Høyde:</strong> ${Math.round(props.altitude)}m</div>` : ''}
+            </div>
+          </div>
+          ` : ''}
+          
+          <!-- Air Quality Pod (Bottom - 180°) - Only show if has data -->
+          ${hasAirQuality ? `
+          <div class="orbital-data-pod air-quality" style="bottom: 20px; left: 50%; transform: translateX(-50%);">
+            <div class="pod-title">🌬️ Luftkvalitet</div>
+            <div class="pod-content">
+              <div><strong>PM2.5:</strong> ${props.pm25Standard ? `${props.pm25Standard} μg/m³` : 'N/A'}</div>
+              <div><strong>PM10:</strong> ${props.pm10Standard ? `${props.pm10Standard} μg/m³` : 'N/A'}</div>
+              <div><strong>IAQ:</strong> ${props.iaq ? `${props.iaq}` : 'N/A'}</div>
+            </div>
+          </div>
+          ` : ''}
+          
+          <!-- Info Pod (Bottom Left - 225°) - Always show -->
+          <div class="orbital-data-pod info" style="bottom: calc(50% - var(--orbital-radius) * 0.707); left: calc(50% - var(--orbital-radius) * 0.707); transform: translate(-50%, 50%);">
+            <div class="pod-title">ℹ️ Info</div>
+            <div class="pod-content">
+              <div><strong>ID:</strong> ${props.nodeId}</div>
+              <div><strong>HW:</strong> ${props.hwModel || 'Ukjent'}</div>
+              <div><strong>Rolle:</strong> ${props.role || 'CLIENT'}</div>
+            </div>
+          </div>
+          
+          <!-- Time Pod (Left - 270°) - Only show if has data -->
+          ${hasTime ? `
+          <div class="orbital-data-pod info" style="top: 50%; left: calc(50% - var(--orbital-radius)); transform: translate(-50%, -50%);">
+            <div class="pod-title">🕐 Tid</div>
+            <div class="pod-content">
+              <div><strong>Sist sett:</strong></div>
+              <div style="font-size: 0.9em;">${props.lastHeardNorwegian || 'N/A'}</div>
+              <div><strong>For:</strong> ${props.lastHeardAgoSec ? formatDuration(props.lastHeardAgoSec) : 'N/A'}</div>
+            </div>
+          </div>
+          ` : ''}
+          
+          <!-- Control Pod (Top Left - 315°) -->
+          <div class="orbital-data-pod info" style="top: calc(50% - var(--orbital-radius) * 0.707); left: calc(50% - var(--orbital-radius) * 0.707); transform: translate(-50%, -50%);">
+            <div class="pod-title">⚙️ Kontroll</div>
+            <div class="pod-content" style="text-align: center;">
+              <button class="fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${props.nodeId}')" 
+                      style="width: 100%; padding: 8px; font-size: 0.75em; border-radius: 6px; margin-bottom: 8px;">
+                ${isFav ? '★ Favoritt' : '☆ Legg til'}
+              </button>
+              <div style="margin-top: 4px; font-size: 0.65em; color: #666; text-align: center;">
+                💡 Klikk på senter-ikonet for å redigere
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Hidden edit section for compatibility -->
+        <div id="edit-section-${props.nodeId}" style="display:none; margin-top: 20px; padding:12px; background:#f8f9fa; border-radius:6px; border:2px solid #2196F3;">
+          <h4 style="margin:0 0 10px 0; font-size:0.95em; color:#333;">🏷️ Tags</h4>
+          <div id="popup-tags-${props.nodeId}" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;">
+            ${props.tags && props.tags.length > 0 ? 
+              props.tags.map(t => `
+                <span class="tag-chip ${t.type}" style="font-size:0.85em;">
+                  ${t.tag}
+                  <span class="remove-tag" onclick="removeTagFromPopup('${props.nodeId}', '${t.tag}')">×</span>
+                </span>
+              `).join('') : 
+              '<span style="color:#999; font-size:0.85em;">Ingen tags</span>'
+            }
+          </div>
+          <div style="display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;">
+            <input type="text" id="popup-tag-input-${props.nodeId}" placeholder="Ny tag..." 
+                   style="flex:1; min-width:120px; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:16px; box-sizing:border-box;">
+            <select id="popup-tag-type-${props.nodeId}" 
+                    style="padding:8px; border:1px solid #ddd; border-radius:4px; font-size:14px; max-width:110px;">
+              <option value="nickname">Kallenavn</option>
+              <option value="category">Kategori</option>
+              <option value="custom">Custom</option>
+            </select>
+            <button onclick="addTagFromPopup('${props.nodeId}')" 
+                    style="background:#27ae60; color:white; border:none; padding:6px 10px; border-radius:4px; cursor:pointer; font-size:16px; font-weight:bold; min-width:40px; flex-shrink:0; box-shadow:0 1px 3px rgba(0,0,0,0.2);">
+              ➕
+            </button>
+          </div>
+          
+          <h4 style="margin:12px 0 8px 0; font-size:0.95em; color:#333;">📝 Notater</h4>
+          <textarea id="popup-notes-${props.nodeId}" placeholder="Legg til notater om denne noden..." 
+                    style="width:100%; height:80px; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:14px; resize:vertical; box-sizing:border-box;">${props.notes || ''}</textarea>
+          <button onclick="savePopupNotes('${props.nodeId}')" 
+                  style="width:100%; margin-top:8px; background:#4CAF50; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer; font-size:14px;">
+            💾 Lagre notater
+          </button>
+        </div>
+      `;
+    }
+    
+    function formatDuration(seconds) {
+      if (seconds < 60) return `${seconds}s siden`;
+      if (seconds < 3600) return `${Math.floor(seconds / 60)}m siden`;
+      if (seconds < 86400) return `${Math.floor(seconds / 3600)}t siden`;
+      return `${Math.floor(seconds / 86400)}d siden`;
+    }
+    
+    function loadNodes() {
+      fetch(`/nodes.geojson?_=${Date.now()}`)
+        .then(r => r.json())
+        .then(data => {
+          console.log('Loaded nodes:', data.features.length);
+          allNodes = data.features;
+          renderNodes();
+          // updateStatistics() removed - sidebar elements no longer exist
+          
+          // Auto-zoom to show all nodes ONLY on first load
+          if (isFirstLoad && allNodes.length > 0 && nodesLayer.getLayers().length > 0) {
+            const bounds = nodesLayer.getBounds();
+            if (bounds.isValid()) {
+              map.fitBounds(bounds, { padding: [50, 50] });
+              isFirstLoad = false; // Disable auto-zoom after first load
+            }
+          }
+        })
+        .catch(err => console.error('Error loading nodes:', err));
+    }
+    
+    // Function to check if two positions are within clustering distance
+    function areNodesClose(lat1, lon1, lat2, lon2, distanceMeters = 50) {  // 50 meters for reasonable clustering
+      const R = 6371000; // Earth radius in meters
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      const distance = R * c;
+      return distance <= distanceMeters;
+    }
+    
+    // Function to cluster features by position
+    function clusterFeatures(features) {
+      const clusters = [];
+      const processed = new Set();
+      
+      features.forEach((feature, idx) => {
+        if (processed.has(idx)) return;
+        
+        const cluster = [idx];
+        processed.add(idx);
+        
+        const lat1 = feature.geometry.coordinates[1];
+        const lon1 = feature.geometry.coordinates[0];
+        
+        // Find all other nodes within clustering distance
+        features.forEach((other, otherIdx) => {
+          if (processed.has(otherIdx)) return;
+          
+          const lat2 = other.geometry.coordinates[1];
+          const lon2 = other.geometry.coordinates[0];
+          
+          if (areNodesClose(lat1, lon1, lat2, lon2)) {
+            cluster.push(otherIdx);
+            processed.add(otherIdx);
+          }
+        });
+        
+        clusters.push(cluster);
+      });
+      
+      return clusters;
+    }
+    
+    // Trails functionality removed - will be re-implemented with historical GPS data from database
+    // TODO: Implement proper trail visualization using node position history from PostgreSQL
+    
+    function renderNodes() {
+      // Guard: Don't render if no nodes loaded yet
+      if (!allNodes || allNodes.length === 0) {
+        console.log('No nodes loaded yet');
+        return;
+      }
+      
+      const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+      
+      // Clear all layers including labels
+      nodesLayer.eachLayer(layer => {
+        if (layer._labelMarker && map.hasLayer(layer._labelMarker)) {
+          map.removeLayer(layer._labelMarker);
+        }
+      });
+      nodesLayer.clearLayers();
+      
+      // Count nodes by status
+      let counts = {favorite: 0, online: 0, recent: 0, offline: 0};
+      let displayed = 0;
+      let filteredFeatures = [];
+      
+      // First pass: Filter nodes
+      allNodes.forEach(f => {
+        const props = f.properties;
+        // Check both server favorites and local favorites
+        const isFav = props.isFavorite || favorites.has(props.nodeId);
+        
+        // Count by status
+        if (isFav) counts.favorite++;
+        if (props.status === 'online') counts.online++;
+        else if (props.status === 'recent') counts.recent++;
+        else counts.offline++;
+        
+        // Apply source filter based on 'source' field (radio or mqtt)
+        const dataSource = (props.source || 'radio').toLowerCase(); // 'source' column from database
+        if (dataSource === 'radio') {
+          if (!sourceFilters.radio) return;
+        } else if (dataSource === 'mqtt') {
+          if (!sourceFilters.mqtt) return;
+        }
+        
+        // Apply status filter
+        if (activeFilter === 'favorite' && !isFav) return;
+        if (activeFilter && activeFilter !== 'favorite' && props.status !== activeFilter) return;
+        
+        // Apply search
+        const searchable = [
+          props.nodeId,
+          props.longName,
+          props.shortName,
+          props.customLabel
+        ].filter(Boolean).join(' ').toLowerCase();
+        
+        if (searchTerm && !searchable.includes(searchTerm)) return;
+        
+        // Store extended properties
+        filteredFeatures.push({
+          feature: f,
+          isFav: isFav,
+          props: props
+        });
+      });
+      
+      // Second pass: Cluster nodes by position
+      const clusters = clusterFeatures(filteredFeatures.map(ff => ff.feature));
+      
+      // Third pass: Render clusters with stacked labels
+      clusters.forEach(clusterIndices => {
+        const clusterFeatures = clusterIndices.map(idx => filteredFeatures[idx]);
+        
+        // Use the first node's position for the cluster center
+        const centerFeature = clusterFeatures[0].feature;
+        const centerLat = centerFeature.geometry.coordinates[1];
+        const centerLon = centerFeature.geometry.coordinates[0];
+        
+        // Render each node in the cluster as a simple circle marker
+        clusterFeatures.forEach((ff, stackIndex) => {
+          const f = ff.feature;
+          const props = ff.props;
+          const isFav = ff.isFav;
+          
+          // Determine status color
+          let statusColor = '#666';  // offline
+          if (isFav) statusColor = '#FFD700';  // gold for favorites
+          else if (props.status === 'online') statusColor = '#4CAF50';  // green
+          else if (props.status === 'recent') statusColor = '#FF9800';  // orange
+          
+          // Calculate vertical offset for stacked nodes (only for true overlapping nodes)
+          const isOverlapping = clusterFeatures.length > 1;
+          
+          // Create a simple circle marker at the node position
+          const labelLat = f.geometry.coordinates[1];
+          const labelLon = f.geometry.coordinates[0];
+          
+          const circleMarker = L.circleMarker([labelLat, labelLon], {
+            radius: 8,
+            fillColor: statusColor,
+            color: '#fff',
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0.8
+          });
+          
+          // Add to map
+          circleMarker.addTo(nodesLayer);
+          
+          // Make circle clickable - two-step interaction
+          circleMarker.on('click', function(e) {
+            // Prevent event bubbling
+            L.DomEvent.stopPropagation(e);
+            
+            console.log('Node clicked:', props.nodeId);
+            
+            // Check if this node is already zoomed to
+            if (lastZoomedNode === props.nodeId && map.getZoom() >= 15) {
+              // Second click on same zoomed node: Show pod overlay
+              console.log('Second click - showing pods for:', props.nodeId);
+              showPodOverlay(props.nodeId, circleMarker, {...props, isFavorite: isFav});
+            } else {
+              // First click: Zoom to node
+              console.log('First click - zooming to:', props.nodeId);
+              lastZoomedNode = props.nodeId;
+              
+              // Smooth zoom to node
+              map.flyTo([labelLat, labelLon], 16, {
+                animate: true,
+                duration: 0.8,
+                easeLinearity: 0.25
+              });
+            }
+          });
+          
+          // No need to add marker separately - labelMarker is already added above
+          displayed++;
+        });
+      });
+      
+      // Update counts
+      const totalNodes = counts.online + counts.recent + counts.offline;
+      document.getElementById('total-nodes').textContent = totalNodes;
+      document.getElementById('total-nodes-menu').textContent = totalNodes;
+      document.getElementById('count-online').textContent = counts.online;
+      document.getElementById('count-recent').textContent = counts.recent;
+      document.getElementById('count-offline').textContent = counts.offline;
+      
+      // Show/hide empty state
+      const emptyState = document.getElementById('emptyState');
+      if (displayed === 0) {
+        emptyState.classList.remove('hidden');
+      } else {
+        emptyState.classList.add('hidden');
+      }
+      
+      // Auto-zoom disabled to prevent unwanted map movements when editing
+      // Users can manually zoom or use Reset View button
+    }
+    
+    // Toggle favorite function (called from popup button)
+    function toggleFavorite(nodeId) {
+      if (favorites.has(nodeId)) {
+        favorites.delete(nodeId);
+      } else {
+        favorites.add(nodeId);
+      }
+      
+      // Save to localStorage
+      localStorage.setItem('favorites', JSON.stringify([...favorites]));
+      
+      // Update favorites bar and re-render
+      updateFavoritesBar();
+      renderNodes();
+      loadNodes();
+    }
+    
+    // Make globally accessible
+    window.toggleFavorite = toggleFavorite;
+    
+    // toggleNodeTrail() removed - will be re-implemented with historical GPS data from database
+    
+    // Dim map when popup opens
+    map.on('popupopen', function() {
+      // Dim all map layers except popup
+      document.querySelector('.leaflet-tile-pane').classList.add('map-dimmed');
+      document.querySelector('.leaflet-overlay-pane').classList.add('map-dimmed');
+    });
+    
+    // Remove dimming when popup closes
+    map.on('popupclose', function() {
+      document.querySelector('.leaflet-tile-pane').classList.remove('map-dimmed');
+      document.querySelector('.leaflet-overlay-pane').classList.remove('map-dimmed');
+    });
+    
+    // Load favorites from localStorage
+    function loadFavorites() {
+      try {
+        const stored = localStorage.getItem('favorites');
+        if (stored) {
+          favorites = new Set(JSON.parse(stored));
+          console.log('Loaded favorites from localStorage:', Array.from(favorites));
+        } else {
+          console.log('No favorites found in localStorage');
+        }
+      } catch (e) {
+        console.error('Failed to load favorites:', e);
+      }
+    }
+    
+    // Event listeners
+    document.getElementById('searchInput').addEventListener('input', renderNodes);
+    
+    // Source filter checkboxes
+    document.getElementById('sourceRadio').addEventListener('change', (e) => {
+      sourceFilters.radio = e.target.checked;
+      console.log('Source filters:', sourceFilters);
+      renderNodes();
+    });
+    
+    document.getElementById('sourceMQTT').addEventListener('change', (e) => {
+      sourceFilters.mqtt = e.target.checked;
+      console.log('Source filters:', sourceFilters);
+      renderNodes();
+    });
+    
+    // Note: Filter badge click handlers now handled by dropdown system above
+    // Reset button removed - use "Alle" in status dropdown instead
+    
+    // Initial load and refresh
+    loadFavorites();
+    loadNodes();
+    // loadTrails() removed - will be re-implemented with historical GPS data
+    
+    // Start auto-refresh
+    startAutoRefresh();
+    
+    // Handle orientation changes on mobile
+    window.addEventListener('orientationchange', () => {
+      setTimeout(() => map.invalidateSize(), 100);
+    });
+    
+    // ==================== SIDEBAR FUNCTIONALITY ====================
+    
+    let currentNodeId = null;
+    
+    // Sidebar removed - all node management now done via popup edit
+    
+    // All sidebar-related functions removed
+    // Node editing is now done entirely through popup interface
+    
+    async function searchNodes(query) {
+      try {
+        // Use client-side search on existing geojson data
+        const response = await fetch(`${API_BASE_URL}/nodes.geojson`);
+        const geojsonData = await response.json();
+        
+        const lowerQuery = query.toLowerCase();
+        const matchingNodes = [];
+        
+        geojsonData.features.forEach(feature => {
+          const props = feature.properties;
+          const coords = feature.geometry.coordinates;
+          
+          // Search in longName, shortName, nodeId
+          const searchFields = [
+            props.longName || '',
+            props.shortName || '',
+            props.nodeId || ''
+          ].join(' ').toLowerCase();
+          
+          if (searchFields.includes(lowerQuery)) {
+            matchingNodes.push({
+              node_id: props.nodeId,
+              long_name: props.longName,
+              short_name: props.shortName,
+              latitude: coords[1],
+              longitude: coords[0],
+              has_position: coords[1] && coords[0],
+              status: props.status
+            });
+          }
+        });
+        
+        const resultsDiv = document.getElementById('searchResults');
+        if (matchingNodes.length === 0) {
+          resultsDiv.innerHTML = '<div style="padding: 12px; text-align: center; color: #999;">Ingen resultater</div>';
+          resultsDiv.style.display = 'block';
+          return;
+        }
+        
+        resultsDiv.innerHTML = matchingNodes.map(node => `
+          <div class="search-result-item" onclick="selectNode('${node.node_id}', ${node.latitude}, ${node.longitude})">
+            <div class="node-info">
+              <div class="node-name">${node.long_name || node.short_name || node.node_id}</div>
+              <div class="node-id">${node.node_id}</div>
+              <div style="font-size: 0.75em; color: #666;">Status: ${node.status || 'unknown'}</div>
+            </div>
+            <span class="node-status ${node.has_position ? 'has-position' : 'no-position'}">
+              ${node.has_position ? '📍' : '❌'}
+            </span>
+          </div>
+        `).join('');
+        
+        resultsDiv.style.display = 'block';
+        
+        // Auto-zoom to first result if only one match
+        if (matchingNodes.length === 1 && matchingNodes[0].has_position) {
+          setTimeout(() => {
+            map.setView([matchingNodes[0].latitude, matchingNodes[0].longitude], 14, {
+              animate: true,
+              duration: 0.8
+            });
+          }, 500);
+        }
+        
+      } catch (error) {
+        console.error('Search error:', error);
+        const resultsDiv = document.getElementById('searchResults');
+        resultsDiv.innerHTML = '<div style="padding: 12px; text-align: center; color: #f44336;">Søkefeil</div>';
+        resultsDiv.style.display = 'block';
+      }
+    }
+    
+    async function selectNode(nodeId, lat, lon) {
+      currentNodeId = nodeId;
+      
+      // Close search results
+      document.getElementById('searchResults').style.display = 'none';
+      document.getElementById('sidebarSearch').value = '';
+      
+      // Show node editor
+      document.getElementById('nodeEditor').style.display = 'block';
+      document.getElementById('nodeEditorTitle').textContent = `Node: ${nodeId}`;
+      
+      // Zoom to node and open popup if it has position
+      if (lat && lon) {
+        map.setView([lat, lon], 14, {
+          animate: true,
+          duration: 0.8
+        });
+        
+        // Find and open the popup for this node after zoom
+        setTimeout(() => {
+          nodesLayer.eachLayer(layer => {
+            if (layer.feature && layer.feature.properties.nodeId === nodeId) {
+              layer.openPopup();
+            }
+          });
+        }, 1000);
+      }
+      
+      // Load node data
+      await loadNodeData(nodeId);
+    }
+    
+    async function loadNodeData(nodeId) {
+      try {
+        // Load tags
+        const tagsResponse = await fetch(`${API_BASE_URL}/api/node/${nodeId}/tags`);
+        const tagsData = await tagsResponse.json();
+        
+        const tagList = document.getElementById('tagList');
+        if (tagsData.tags && tagsData.tags.length > 0) {
+          tagList.innerHTML = tagsData.tags.map(tag => `
+            <span class="tag-chip ${tag.type}">
+              ${tag.tag}
+              <span class="remove-tag" onclick="removeTag('${tag.tag}')">×</span>
+            </span>
+          `).join('');
+        } else {
+          tagList.innerHTML = '<div style="color: #999; font-size: 0.85em;">Ingen tags ennå</div>';
+        }
+        
+        // Find node in current data to get position info
+        const nodeFeature = nodesData.features.find(f => f.properties.nodeId === nodeId);
+        if (nodeFeature) {
+          const props = nodeFeature.properties;
+          const posInfo = document.getElementById('positionInfo');
+          const removeBtn = document.getElementById('removePositionBtn');
+          
+          if (props.positionSource === 'manual') {
+            posInfo.innerHTML = `
+              <div class="label">Manuell posisjon:</div>
+              <div class="coords">${nodeFeature.geometry.coordinates[1].toFixed(6)}, ${nodeFeature.geometry.coordinates[0].toFixed(6)}</div>
+              ${props.manualAddress ? `<div style="margin-top: 4px; color: #666;">${props.manualAddress}</div>` : ''}
+              <span class="source-badge manual">Manuelt satt</span>
+            `;
+            removeBtn.style.display = 'block';
+          } else if (nodeFeature.geometry.coordinates) {
+            posInfo.innerHTML = `
+              <div class="label">GPS-posisjon:</div>
+              <div class="coords">${nodeFeature.geometry.coordinates[1].toFixed(6)}, ${nodeFeature.geometry.coordinates[0].toFixed(6)}</div>
+              <span class="source-badge gps">Fra GPS</span>
+            `;
+            removeBtn.style.display = 'none';
+          } else {
+            posInfo.innerHTML = '<div style="color: #999;">Ingen posisjon</div>';
+            removeBtn.style.display = 'none';
+          }
+          
+          // Load notes
+          document.getElementById('notesTextarea').value = props.notes || '';
+        }
+      } catch (error) {
+        console.error('Error loading node data:', error);
+      }
+    }
+    
+    async function addTag() {
+      const tagInput = document.getElementById('newTagInput');
+      const tag = tagInput.value.trim();
+      const type = document.getElementById('tagTypeSelect').value;
+      
+      if (!tag) {
+        alert('Vennligst skriv inn en tag');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(currentNodeId)}/tags`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`
+          },
+          body: JSON.stringify({ tag, type })
+        });
+        
+        if (response.ok) {
+          tagInput.value = '';
+          await loadNodeData(currentNodeId);
+          await loadNodes(); // Reload map data to show new tags
+        } else {
+          alert('Feil ved lagring av tag');
+        }
+      } catch (error) {
+        console.error('Error adding tag:', error);
+        alert('Feil ved lagring av tag');
+      }
+    }
+    
+    async function removeTag(tag) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(currentNodeId)}/tags?tag=${encodeURIComponent(tag)}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${API_KEY}`
+          }
+        });
+        
+        if (response.ok) {
+          await loadNodeData(currentNodeId);
+          await loadNodes(); // Reload map data
+        } else {
+          alert('❌ Feil ved sletting av tag');
+        }
+      } catch (error) {
+        console.error('Error removing tag:', error);
+        alert('❌ Feil ved sletting av tag');
+      }
+    }
+    
+    function showPositionForm() {
+      document.getElementById('positionForm').style.display = 'block';
+      document.getElementById('positionButtons').style.display = 'none';
+    }
+    
+    function cancelManualPosition() {
+      document.getElementById('positionForm').style.display = 'none';
+      document.getElementById('positionButtons').style.display = 'flex';
+      // Clear inputs
+      document.getElementById('manualLat').value = '';
+      document.getElementById('manualLon').value = '';
+      document.getElementById('manualAlt').value = '';
+      document.getElementById('manualAddress').value = '';
+    }
+    
+    async function saveManualPosition() {
+      const lat = parseFloat(document.getElementById('manualLat').value);
+      const lon = parseFloat(document.getElementById('manualLon').value);
+      const alt = parseFloat(document.getElementById('manualAlt').value) || 0;
+      const address = document.getElementById('manualAddress').value.trim();
+      
+      if (isNaN(lat) || isNaN(lon)) {
+        alert('Vennligst fyll inn gyldige koordinater');
+        return;
+      }
+      
+      if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+        alert('Ugyldig latitude/longitude');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(currentNodeId)}/position`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`
+          },
+          body: JSON.stringify({ latitude: lat, longitude: lon, altitude: alt, address })
+        });
+        
+        if (response.ok) {
+          alert('Posisjon lagret!');
+          cancelManualPosition();
+          await loadNodeData(currentNodeId);
+          await loadNodes(); // Reload map to show new position
+        } else {
+          alert('Feil ved lagring av posisjon');
+        }
+      } catch (error) {
+        console.error('Error saving position:', error);
+        alert('Feil ved lagring av posisjon');
+      }
+    }
+    
+    async function removeManualPosition() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(currentNodeId)}/position`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${API_KEY}`
+          }
+        });
+        
+        if (response.ok) {
+          alert('Manuell posisjon fjernet');
+          await loadNodeData(currentNodeId);
+          await loadNodes(); // Reload map
+        } else {
+          alert('Feil ved fjerning av posisjon');
+        }
+      } catch (error) {
+        console.error('Error removing position:', error);
+        alert('Feil ved fjerning av posisjon');
+      }
+    }
+    
+    async function saveNotes() {
+      // Notes are stored in node_tags table or we can add a notes column
+      // For now, we'll show a success message
+      alert('Notater lagret! (Feature kommer snart)');
+    }
+    
+    // Statistics removed - sidebar elements no longer exist (v3.7.0)
+    
+    // ==================== POPUP EDIT FUNCTIONS ====================
+    
+    function togglePopupEdit(nodeId) {
+      const editSection = document.getElementById(`edit-section-${nodeId}`);
+      if (editSection.style.display === 'none') {
+        editSection.style.display = 'block';
+        pauseAutoRefresh(); // Pause when opening edit
+      } else {
+        editSection.style.display = 'none';
+        resumeAutoRefresh(); // Resume when closing edit
+      }
+    }
+    
+    function handleEditClick(nodeId) {
+      console.log('=== handleEditClick START ===');
+      console.log('NodeId:', nodeId);
+      console.log('isMobile():', isMobile());
+      console.log('Window width:', window.innerWidth);
+      
+      // Pause auto-refresh when editing starts
+      pauseAutoRefresh();
+      
+      try {
+        // On mobile, open fullscreen modal
+        if (isMobile()) {
+          console.log('Attempting to open mobile modal...');
+          const result = openMobileEdit(nodeId);
+          console.log('openMobileEdit returned:', result);
+          if (result) {
+            // Close the popup since we're opening the mobile modal
+            map.closePopup();
+            console.log('Mobile modal opened successfully');
+            return;
+          } else {
+            console.error('openMobileEdit failed - returned false');
+          }
+        } else {
+          // On desktop, use fullscreen modal
+          console.log('Attempting to open desktop modal...');
+          const result = openDesktopEdit(nodeId);
+          console.log('openDesktopEdit returned:', result);
+          if (result) {
+            // Close the popup since we're opening the desktop modal
+            map.closePopup();
+            console.log('Desktop modal opened successfully');
+            return;
+          } else {
+            console.error('openDesktopEdit failed - returned false');
+          }
+        }
+        
+        // Fallback to popup edit (should not happen)
+        console.log('FALLBACK: Using desktop popup edit');
+        togglePopupEdit(nodeId);
+      } catch (error) {
+        console.error('ERROR in handleEditClick:', error);
+        alert('Feil ved åpning av redigeringsmeny: ' + error.message);
+      }
+      
+      console.log('=== handleEditClick END ===');
+    }
+    
+    // Make function globally accessible for inline onclick handlers
+    window.handleEditClick = handleEditClick;
+    
+    async function addTagFromPopup(nodeId) {
+      const tagInput = document.getElementById(`popup-tag-input-${nodeId}`);
+      const tagType = document.getElementById(`popup-tag-type-${nodeId}`).value;
+      const tag = tagInput.value.trim();
+      
+      if (!tag) {
+        alert('⚠️ Vennligst skriv inn en tag først');
+        return;
+      }
+      
+      try {
+        console.log('Adding tag:', tag, 'type:', tagType, 'to node:', nodeId);
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(nodeId)}/tags`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`
+          },
+          body: JSON.stringify({ tag, type: tagType })
+        });
+        
+        console.log('Response status:', response.status, response.statusText);
+        
+        if (response.ok) {
+          const result = await response.json();
+          console.log('Tag added successfully:', result);
+          tagInput.value = '';
+          alert(`✅ Tag "${tag}" lagt til!`);
+          // Reload data to update popup
+          await loadNodes();
+          // Re-open the popup with updated content
+          setTimeout(() => {
+            const marker = findMarkerByNodeId(nodeId);
+            if (marker) {
+              marker.openPopup();
+              // Re-open edit section
+              setTimeout(() => {
+                const editSection = document.getElementById(`edit-section-${nodeId}`);
+                if (editSection) {
+                  editSection.style.display = 'block';
+                }
+              }, 100);
+            }
+          }, 500);
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          console.error('Failed to add tag:', response.status, errorData);
+          alert(`❌ Feil ved lagring av tag: ${errorData.error || response.statusText}`);
+        }
+      } catch (error) {
+        console.error('Error adding tag:', error);
+        alert(`❌ Nettverksfeil: ${error.message}`);
+      }
+    }
+    
+    async function removeTagFromPopup(nodeId, tag) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(nodeId)}/tags?tag=${encodeURIComponent(tag)}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${API_KEY}`
+          }
+        });
+        
+        if (response.ok) {
+          await loadNodes();
+          // Re-open the popup with updated content, but keep edit section open
+          setTimeout(() => {
+            const marker = findMarkerByNodeId(nodeId);
+            if (marker) {
+              marker.openPopup();
+              // Ensure edit section stays open
+              setTimeout(() => {
+                const editSection = document.getElementById(`edit-section-${nodeId}`);
+                if (editSection) {
+                  editSection.style.display = 'block';
+                }
+              }, 200); // Increased timeout to ensure popup is fully loaded
+            }
+          }, 300); // Reduced timeout for faster response
+        } else {
+          alert('❌ Feil ved sletting av tag');
+        }
+      } catch (error) {
+        console.error('Error removing tag:', error);
+        alert('❌ Feil ved sletting av tag');
+      }
+    }
+    
+    async function savePositionFromPopup(nodeId) {
+      const latValue = document.getElementById(`popup-lat-${nodeId}`).value.trim();
+      const lonValue = document.getElementById(`popup-lon-${nodeId}`).value.trim();
+      const address = document.getElementById(`popup-addr-${nodeId}`).value.trim();
+      
+      // Sjekk at minst ett felt er fylt
+      if (!latValue && !lonValue && !address) {
+        alert('⚠️ Vennligst fyll ut minst ett felt (koordinater eller adresse)');
+        return;
+      }
+      
+      // Hvis koordinater er fylt, må begge være gyldige
+      const lat = latValue ? parseFloat(latValue) : null;
+      const lon = lonValue ? parseFloat(lonValue) : null;
+      
+      if ((latValue && isNaN(lat)) || (lonValue && isNaN(lon))) {
+        alert('⚠️ Ugyldig koordinat-format. Bruk desimaltall (f.eks. 69.6812)');
+        return;
+      }
+      
+      if ((lat !== null && lon === null) || (lat === null && lon !== null)) {
+        alert('⚠️ Hvis du bruker koordinater, må både latitude og longitude fylles ut');
+        return;
+      }
+      
+      if (lat !== null && (lat < -90 || lat > 90 || lon < -180 || lon > 180)) {
+        alert('⚠️ Ugyldig latitude/longitude (lat: -90 til 90, lon: -180 til 180)');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(nodeId)}/position`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`
+          },
+          body: JSON.stringify({ latitude: lat, longitude: lon, altitude: 0, address })
+        });
+        
+        if (response.ok) {
+          alert('✅ Posisjon lagret! Kartet oppdateres...');
+          // Clear form fields
+          document.getElementById(`popup-lat-${nodeId}`).value = '';
+          document.getElementById(`popup-lon-${nodeId}`).value = '';
+          document.getElementById(`popup-addr-${nodeId}`).value = '';
+          await loadNodes();
+          // Zoom to new position if coordinates were provided
+          setTimeout(() => {
+            if (lat !== null && lon !== null) {
+              map.setView([lat, lon], 14);
+            }
+          }, 500);
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          alert(`❌ Feil ved lagring av posisjon: ${errorData.error || response.statusText}`);
+        }
+      } catch (error) {
+        console.error('Error saving position:', error);
+        alert(`❌ Nettverksfeil: ${error.message}`);
+      }
+    }
+    
+    async function removePositionFromPopup(nodeId) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(nodeId)}/position`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${API_KEY}`
+          }
+        });
+        
+        if (response.ok) {
+          alert('Manuell posisjon fjernet');
+          await loadNodes();
+        } else {
+          alert('Feil ved fjerning av posisjon');
+        }
+      } catch (error) {
+        console.error('Error removing position:', error);
+        alert('Feil ved fjerning av posisjon');
+      }
+    }
+    
+    function findMarkerByNodeId(nodeId) {
+      let foundMarker = null;
+      nodesLayer.eachLayer(layer => {
+        if (layer.feature && layer.feature.properties.nodeId === nodeId) {
+          foundMarker = layer;
+        }
+      });
+      return foundMarker;
+    }
+    
+    // ==================== MOBILE TOUCH GESTURES ====================
+    // (Sidebar removed in v3.7.0 - mobile gesture handling no longer needed)
+    
+    // Add viewport meta tag if not present (for proper mobile scaling)
+    if (!document.querySelector('meta[name="viewport"]')) {
+      const viewport = document.createElement('meta');
+      viewport.name = 'viewport';
+      viewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+      document.head.appendChild(viewport);
+    }
+    
+    // ==================== MOBILE EDIT MODAL FUNCTIONS ====================
+    // currentMobileNodeId declared at top of script
+    
+    function isMobile() {
+      return window.innerWidth <= 768;
+    }
+    
+    function openMobileEdit(nodeId) {
+      console.log('openMobileEdit called for:', nodeId, 'isMobile check:', isMobile());
+      if (!isMobile()) return false;
+      
+      currentMobileNodeId = nodeId;
+      const modal = document.getElementById('mobileEditModal');
+      console.log('Mobile modal element:', modal);
+      
+      if (!modal) {
+        console.error('Mobile modal not found!');
+        return false;
+      }
+      
+      const title = document.getElementById('mobileEditTitle');
+      
+      // Find node data
+      const node = allNodes.find(f => f.properties.nodeId === nodeId);
+      const nodeName = node ? (node.properties.longName || nodeId) : nodeId;
+      
+      title.textContent = `Rediger: ${nodeName}`;
+      modal.classList.add('active');
+      
+      // Pause auto-refresh while editing
+      pauseAutoRefresh();
+      
+      // Start live updates for this node
+      startLiveNodeUpdate(nodeId);
+      
+      // Load data into mobile modal
+      loadMobileEditData(nodeId);
+      
+      // Prevent background scrolling
+      document.body.style.overflow = 'hidden';
+      
+      return true;
+    }
+    
+    function closeMobileEdit() {
+      const modal = document.getElementById('mobileEditModal');
+      modal.classList.remove('active');
+      currentMobileNodeId = null;
+      
+      // Resume auto-refresh when editing is done
+      resumeAutoRefresh();
+      
+      // Stop live updates
+      stopLiveNodeUpdate();
+      
+      // Re-enable background scrolling
+      document.body.style.overflow = '';
+    }
+    
+    async function loadMobileEditData(nodeId) {
+      console.log('Loading mobile edit data for node:', nodeId);
+      
+      try {
+        // Load fresh node data from API (not from cache)
+        const nodeResponse = await fetch(`${API_BASE_URL}/api/nodes?_=${Date.now()}`);
+        const nodeData = await nodeResponse.json();
+        const nodeFromApi = nodeData.nodes.find(n => n.node_id === nodeId);
+        
+        // Also check cached data as fallback
+        const nodeFromCache = allNodes.find(f => f.properties.nodeId === nodeId);
+        
+        // Load tags from API
+        console.log('Fetching tags for node:', nodeId);
+        const tagsResponse = await fetch(`${API_BASE_URL}/api/node/${nodeId}/tags`, {
+          headers: { 'Authorization': `Bearer ${API_KEY}` }
+        });
+        const tagsData = await tagsResponse.json();
+        
+        console.log('Tags data received:', tagsData);
+        
+        const tagList = document.getElementById('mobileTagList');
+        if (tagsData.tags && tagsData.tags.length > 0) {
+          console.log('Rendering', tagsData.tags.length, 'tags');
+          tagList.innerHTML = tagsData.tags.map(tag => `
+            <span class="mobile-tag-chip ${tag.type}">
+              ${tag.tag}
+              <span class="remove-tag" onclick="removeMobileTag('${tag.tag}')">×</span>
+            </span>
+          `).join('');
+        } else {
+          console.log('No tags found, showing empty state');
+          tagList.innerHTML = '<span style="color:#999; font-size:0.9em;">Ingen tags</span>';
+        }
+        
+        // Use fresh API data if available, otherwise fallback to cache
+        if (nodeFromApi) {
+          const posInfo = document.getElementById('mobilePositionInfo');
+          const removeBtn = document.getElementById('mobileRemovePositionBtn');
+          
+          // Position info (API has fresh data)
+          if (nodeFromApi.latitude && nodeFromApi.longitude) {
+            posInfo.innerHTML = `
+              <div style="font-weight: 600; margin-bottom: 4px;">Posisjon:</div>
+              <div style="font-family: monospace; color: #333;">${nodeFromApi.latitude.toFixed(6)}, ${nodeFromApi.longitude.toFixed(6)}</div>
+              ${nodeFromApi.altitude ? `<div style="color: #666;">Høyde: ${nodeFromApi.altitude}m</div>` : ''}
+              <div style="color: #4CAF50; font-size: 0.85em; margin-top: 4px;">📡 Aktiv</div>
+            `;
+            removeBtn.style.display = 'block';
+          } else {
+            posInfo.innerHTML = '<div style="color: #999;">Ingen posisjon</div>';
+            removeBtn.style.display = 'none';
+          }
+          
+          // Load notes from API data
+          document.getElementById('mobileNotesTextarea').value = nodeFromApi.notes || '';
+          
+          // Load initial telemetry data from API
+          console.log('Loading mobile telemetry data for:', nodeFromApi.node_id);
+          updateMobileTelemetryData({
+            temperature: nodeFromApi.temperature,
+            humidity: nodeFromApi.humidity,
+            pressure: nodeFromApi.pressure,
+            batteryLevel: nodeFromApi.battery_level,
+            voltage: nodeFromApi.voltage,
+            snr: nodeFromApi.snr,
+            // Add other telemetry fields as needed
+          });
+        } else if (nodeFromCache) {
+          // Fallback to cached data if API fails
+          const props = nodeFromCache.properties;
+          const posInfo = document.getElementById('mobilePositionInfo');
+          
+          if (props.latitude && props.longitude) {
+            posInfo.innerHTML = `
+              <div style="font-weight: 600; margin-bottom: 4px;">Posisjon (cached):</div>
+              <div style="font-family: monospace; color: #333;">${props.latitude.toFixed(6)}, ${props.longitude.toFixed(6)}</div>
+            `;
+          }
+          
+          document.getElementById('mobileNotesTextarea').value = props.notes || '';
+          console.log('Loading mobile telemetry data for:', props.nodeId, props);
+          updateMobileTelemetryData(props);
+        }
+      } catch (error) {
+        console.error('Error loading mobile edit data:', error);
+      }
+    }
+    
+    async function addMobileTag() {
+      const tagInput = document.getElementById('mobileTagInput');
+      const tagType = document.getElementById('mobileTagType').value;
+      const tag = tagInput.value.trim();
+      
+      if (!tag) {
+        alert('⚠️ Vennligst skriv inn en tag først');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(currentMobileNodeId)}/tags`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`
+          },
+          body: JSON.stringify({ tag, type: tagType })
+        });
+        
+        if (response.ok) {
+          tagInput.value = '';
+          await loadNodes(); // Reload map data
+          await loadMobileEditData(currentMobileNodeId); // Reload modal data
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          alert(`❌ Feil ved lagring av tag: ${errorData.error || response.statusText}`);
+        }
+      } catch (error) {
+        console.error('Error adding mobile tag:', error);
+        alert(`❌ Nettverksfeil: ${error.message}`);
+      }
+    }
+    
+    async function removeMobileTag(tag) {
+      console.log('Attempting to remove mobile tag:', tag, 'from node:', currentMobileNodeId);
+      
+      try {
+        console.log('Sending DELETE request for tag:', tag);
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(currentMobileNodeId)}/tags?tag=${encodeURIComponent(tag)}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${API_KEY}` }
+        });
+        
+        console.log('DELETE response status:', response.status, response.statusText);
+        
+        if (response.ok) {
+          console.log('Tag deleted successfully, reloading data...');
+          await loadNodes(); // Reload map data
+          await loadMobileEditData(currentMobileNodeId); // Reload modal data
+          console.log('Data reloaded after tag deletion');
+        } else {
+          const errorData = await response.text();
+          console.error('Failed to delete tag:', response.status, errorData);
+          alert('❌ Feil ved sletting av tag');
+        }
+      } catch (error) {
+        console.error('Error removing mobile tag:', error);
+        alert('❌ Feil ved sletting av tag');
+      }
+    }
+    
+    function showMobilePositionForm() {
+      document.getElementById('mobilePositionForm').style.display = 'block';
+      document.getElementById('mobilePositionButtons').style.display = 'none';
+      document.getElementById('mobilePositionSaveButtons').style.display = 'block';
+    }
+    
+    function hideMobilePositionForm() {
+      document.getElementById('mobilePositionForm').style.display = 'none';
+      document.getElementById('mobilePositionButtons').style.display = 'block';
+      document.getElementById('mobilePositionSaveButtons').style.display = 'none';
+      // Clear inputs
+      document.getElementById('mobileLat').value = '';
+      document.getElementById('mobileLon').value = '';
+      document.getElementById('mobileAlt').value = '';
+      document.getElementById('mobileAddress').value = '';
+    }
+    
+    async function saveMobilePosition() {
+      const lat = parseFloat(document.getElementById('mobileLat').value);
+      const lon = parseFloat(document.getElementById('mobileLon').value);
+      const alt = document.getElementById('mobileAlt').value ? parseInt(document.getElementById('mobileAlt').value) : null;
+      const address = document.getElementById('mobileAddress').value.trim() || null;
+      
+      if (isNaN(lat) || isNaN(lon)) {
+        alert('⚠️ Vennligst skriv inn gyldig latitude og longitude');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(currentMobileNodeId)}/position`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`
+          },
+          body: JSON.stringify({ latitude: lat, longitude: lon, altitude: alt, address })
+        });
+        
+        if (response.ok) {
+          alert('✅ Posisjon lagret!');
+          hideMobilePositionForm();
+          await loadNodes(); // Reload map data
+          await loadMobileEditData(currentMobileNodeId); // Reload modal data
+        } else {
+          alert('❌ Feil ved lagring av posisjon');
+        }
+      } catch (error) {
+        console.error('Error saving mobile position:', error);
+        alert('❌ Feil ved lagring av posisjon');
+      }
+    }
+    
+    async function removeMobilePosition() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(currentMobileNodeId)}/position`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${API_KEY}` }
+        });
+        
+        if (response.ok) {
+          alert('✅ Manuell posisjon fjernet');
+          await loadNodes(); // Reload map data
+          await loadMobileEditData(currentMobileNodeId); // Reload modal data
+        } else {
+          alert('❌ Feil ved fjerning av posisjon');
+        }
+      } catch (error) {
+        console.error('Error removing mobile position:', error);
+        alert('❌ Feil ved fjerning av posisjon');
+      }
+    }
+    
+    async function saveMobileNotes() {
+      const notes = document.getElementById('mobileNotesTextarea').value.trim();
+      
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(currentMobileNodeId)}/notes`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`
+          },
+          body: JSON.stringify({ notes })
+        });
+        
+        if (response.ok) {
+          alert('✅ Notater lagret!');
+          await loadNodes(); // Reload map data
+        } else {
+          alert('❌ Feil ved lagring av notater');
+        }
+      } catch (error) {
+        console.error('Error saving mobile notes:', error);
+        alert('❌ Feil ved lagring av notater');
+      }
+    }
+    
+    // ==================== DESKTOP FULLSCREEN EDIT MODAL FUNCTIONS ====================
+    // currentDesktopNodeId declared at top of script
+    
+    function openDesktopEdit(nodeId) {
+      console.log('=== openDesktopEdit START ===');
+      console.log('NodeId:', nodeId);
+      console.log('allNodes length:', allNodes ? allNodes.length : 'undefined');
+      
+      currentDesktopNodeId = nodeId;
+      const modal = document.getElementById('desktopEditModal');
+      console.log('Desktop modal element:', modal);
+      console.log('Modal classList before:', modal ? modal.className : 'N/A');
+      
+      if (!modal) {
+        console.error('Desktop modal not found!');
+        return false;
+      }
+      
+      const title = document.getElementById('desktopEditTitle');
+      console.log('Title element:', title);
+      
+      // Find node data
+      const node = allNodes.find(f => f.properties.nodeId === nodeId);
+      console.log('Found node:', node);
+      const nodeName = node ? (node.properties.longName || nodeId) : nodeId;
+      console.log('Node name:', nodeName);
+      
+      title.textContent = `Rediger: ${nodeName}`;
+      modal.classList.add('active');
+      console.log('Modal classList after add:', modal.className);
+      
+      // Check if modal is actually visible
+      const computedStyle = window.getComputedStyle(modal);
+      console.log('Modal display:', computedStyle.display);
+      console.log('Modal opacity:', computedStyle.opacity);
+      console.log('Modal visibility:', computedStyle.visibility);
+      
+      // Pause auto-refresh while editing
+      pauseAutoRefresh();
+      
+      // Start live updates for this node
+      startLiveNodeUpdate(nodeId);
+      
+      // Load data into desktop modal
+      loadDesktopEditData(nodeId);
+      
+      console.log('=== openDesktopEdit END - returning true ===');
+      return true;
+    }
+    
+    function closeDesktopEdit() {
+      const modal = document.getElementById('desktopEditModal');
+      modal.classList.remove('active');
+      currentDesktopNodeId = null;
+      
+      // Resume auto-refresh when editing is done
+      resumeAutoRefresh();
+      
+      // Stop live updates
+      stopLiveNodeUpdate();
+    }
+    
+    function getActiveDesktopNodeId() {
+      return currentDesktopNodeId;
+    }
+    
+    async function loadDesktopEditData(nodeId) {
+      console.log('Loading desktop edit data for node:', nodeId);
+      
+      try {
+        // Load fresh node data from API (not from cache)
+        const nodeResponse = await fetch(`${API_BASE_URL}/api/nodes?_=${Date.now()}`);
+        const nodeData = await nodeResponse.json();
+        const nodeFromApi = nodeData.nodes.find(n => n.node_id === nodeId);
+        
+        // Also check cached data as fallback
+        const nodeFromCache = allNodes.find(f => f.properties.nodeId === nodeId);
+        
+        // Load tags from API
+        const tagsResponse = await fetch(`${API_BASE_URL}/api/node/${nodeId}/tags`, {
+          headers: { 'Authorization': `Bearer ${API_KEY}` }
+        });
+        const tagsData = await tagsResponse.json();
+        
+        const tagList = document.getElementById('desktopTagList');
+        if (tagsData.tags && tagsData.tags.length > 0) {
+          tagList.innerHTML = tagsData.tags.map(tag => `
+            <span class="mobile-tag-chip ${tag.type}">
+              ${tag.tag}
+              <span class="remove-tag" onclick="removeDesktopTag('${tag.tag}')">×</span>
+            </span>
+          `).join('');
+        } else {
+          tagList.innerHTML = '<span style="color:#999; font-size:0.9em;">Ingen tags</span>';
+        }
+        
+        // Use fresh API data if available, otherwise fallback to cache
+        if (nodeFromApi) {
+          const posInfo = document.getElementById('desktopPositionInfo');
+          const removeBtn = document.getElementById('desktopRemovePositionBtn');
+          
+          // Position info (API has fresh data)
+          if (nodeFromApi.latitude && nodeFromApi.longitude) {
+            posInfo.innerHTML = `
+              <div style="font-weight: 600; margin-bottom: 4px;">Posisjon:</div>
+              <div style="font-family: monospace; color: #333;">${nodeFromApi.latitude.toFixed(6)}, ${nodeFromApi.longitude.toFixed(6)}</div>
+              ${nodeFromApi.altitude ? `<div style="color: #666;">Høyde: ${nodeFromApi.altitude}m</div>` : ''}
+              <div style="color: #4CAF50; font-size: 0.85em; margin-top: 4px;">📡 Aktiv</div>
+            `;
+            removeBtn.style.display = 'block';
+          } else {
+            posInfo.innerHTML = '<div style="color: #999;">Ingen posisjon</div>';
+            removeBtn.style.display = 'none';
+          }
+          
+          // Load notes from API data
+          document.getElementById('desktopNotesTextarea').value = nodeFromApi.notes || '';
+          
+          // Load initial telemetry data from API
+          updateDesktopTelemetryData({
+            temperature: nodeFromApi.temperature,
+            humidity: nodeFromApi.humidity,
+            pressure: nodeFromApi.pressure,
+            batteryLevel: nodeFromApi.battery_level,
+            voltage: nodeFromApi.voltage,
+            snr: nodeFromApi.snr,
+            // Add other telemetry fields as needed
+          });
+        } else if (nodeFromCache) {
+          // Fallback to cached data if API fails
+          const props = nodeFromCache.properties;
+          const posInfo = document.getElementById('desktopPositionInfo');
+          
+          if (props.latitude && props.longitude) {
+            posInfo.innerHTML = `
+              <div style="font-weight: 600; margin-bottom: 4px;">Posisjon (cached):</div>
+              <div style="font-family: monospace; color: #333;">${props.latitude.toFixed(6)}, ${props.longitude.toFixed(6)}</div>
+            `;
+          }
+          
+          document.getElementById('desktopNotesTextarea').value = props.notes || '';
+          updateDesktopTelemetryData(props);
+        }
+      } catch (error) {
+        console.error('Error loading desktop edit data:', error);
+      }
+    }
+    
+    function updateDesktopTelemetryData(props) {
+      const desktopFields = [
+        // Temperature & Environment
+        ['desktop-temperature', props.temperature ? `${props.temperature.toFixed(1)}°C` : 'N/A'],
+        ['desktop-humidity', props.humidity ? `${props.humidity.toFixed(1)}%` : 'N/A'],
+        ['desktop-pressure', props.pressure ? `${props.pressure.toFixed(1)} hPa` : 'N/A'],
+        ['desktop-gas_resistance', props.gas_resistance ? `${props.gas_resistance.toFixed(0)} Ω` : 'N/A'],
+        
+        // Power & Battery
+        ['desktop-battery', props.batteryLevel ? `${props.batteryLevel}%` : 'N/A'],
+        ['desktop-voltage', props.voltage ? `${props.voltage.toFixed(2)}V` : 'N/A'],
+        ['desktop-current', props.current ? `${props.current.toFixed(0)}mA` : 'N/A'],
+        ['desktop-power', props.power ? `${props.power.toFixed(1)}W` : 'N/A'],
+        
+        // Air Quality
+        ['desktop-pm10_standard', props.pm10_standard ? `${props.pm10_standard} μg/m³` : 'N/A'],
+        ['desktop-pm25_standard', props.pm25_standard ? `${props.pm25_standard} μg/m³` : 'N/A'],
+        ['desktop-pm100_standard', props.pm100_standard ? `${props.pm100_standard} μg/m³` : 'N/A'],
+        ['desktop-iaq', props.iaq ? `${props.iaq}` : 'N/A'],
+        
+        // Weather & Outdoor
+        ['desktop-wind_direction', props.wind_direction ? `${props.wind_direction}°` : 'N/A'],
+        ['desktop-wind_speed', props.wind_speed ? `${props.wind_speed.toFixed(1)} m/s` : 'N/A'],
+        ['desktop-rain_hourly', props.rain_hourly ? `${props.rain_hourly.toFixed(1)} mm` : 'N/A'],
+        ['desktop-uv_index', props.uv_index ? `${props.uv_index}` : 'N/A'],
+        
+        // Light & Sensors
+        ['desktop-lux', props.lux ? `${props.lux.toFixed(0)} lx` : 'N/A'],
+        ['desktop-pir', props.pir ? (props.pir ? 'Aktivert' : 'Ikke aktivert') : 'N/A'],
+        ['desktop-ambient_light', props.ambient_light ? `${props.ambient_light.toFixed(0)} lx` : 'N/A'],
+        ['desktop-solar_irradiance', props.solar_irradiance ? `${props.solar_irradiance.toFixed(1)} W/m²` : 'N/A'],
+        
+        // Network & Connectivity
+        ['desktop-snr', props.snr ? `${props.snr} dB` : 'N/A'],
+        ['desktop-altitude', props.altitude ? `${Math.round(props.altitude)}m` : 'N/A'],
+        ['desktop-channel_utilization', props.channelUtil ? `${props.channelUtil.toFixed(1)}%` : 'N/A'],
+        ['desktop-air_util_tx', props.airUtilTx ? `${props.airUtilTx.toFixed(1)}%` : 'N/A'],
+        
+        ['desktop-lastheard', props.lastHeardNorwegian || 'N/A'],
+        ['desktop-ago', props.lastHeardAgoSec ? `(${formatDuration(props.lastHeardAgoSec)})` : '']
+      ];
+      
+      desktopFields.forEach(([fieldId, value]) => {
+        const element = document.getElementById(fieldId);
+        if (element && element.textContent !== value) {
+          element.textContent = value;
+          // Flash effect for updated values
+          element.style.backgroundColor = '#e8f5e8';
+          setTimeout(() => {
+            if (element) element.style.backgroundColor = '';
+          }, 1000);
+        }
+      });
+    }
+    
+    // Desktop tag functions (simplified - reuse mobile logic)
+    async function addDesktopTag() {
+      const tagInput = document.getElementById('desktopNewTag');
+      const tagType = document.getElementById('desktopTagType').value;
+      const tag = tagInput.value.trim();
+      
+      if (!tag) return;
+      
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(currentDesktopNodeId)}/tags`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`
+          },
+          body: JSON.stringify({ tag, type: tagType })
+        });
+        
+        if (response.ok) {
+          tagInput.value = '';
+          loadDesktopEditData(currentDesktopNodeId); // Reload tags
+          loadNodes(); // Reload map
+        } else {
+          alert('Feil ved lagring av tag');
+        }
+      } catch (error) {
+        console.error('Error adding desktop tag:', error);
+        alert('Feil ved lagring av tag');
+      }
+    }
+    
+    async function removeDesktopTag(tag) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(currentDesktopNodeId)}/tags`, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`
+          },
+          body: JSON.stringify({ tag })
+        });
+        
+        if (response.ok) {
+          loadDesktopEditData(currentDesktopNodeId); // Reload tags
+          loadNodes(); // Reload map
+        } else {
+          alert('Feil ved sletting av tag');
+        }
+      } catch (error) {
+        console.error('Error removing desktop tag:', error);
+        alert('Feil ved sletting av tag');
+      }
+    }
+    
+    async function saveDesktopPosition() {
+      const lat = parseFloat(document.getElementById('desktop-lat').value);
+      const lon = parseFloat(document.getElementById('desktop-lon').value);
+      const address = document.getElementById('desktop-addr').value.trim() || null;
+      
+      if (isNaN(lat) || isNaN(lon)) {
+        alert('⚠️ Vennligst skriv inn gyldig latitude og longitude');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(currentDesktopNodeId)}/position`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`
+          },
+          body: JSON.stringify({ latitude: lat, longitude: lon, address })
+        });
+        
+        if (response.ok) {
+          alert('✅ Posisjon lagret!');
+          loadDesktopEditData(currentDesktopNodeId);
+          loadNodes();
+        } else {
+          alert('❌ Feil ved lagring av posisjon');
+        }
+      } catch (error) {
+        console.error('Error saving desktop position:', error);
+        alert('❌ Feil ved lagring av posisjon');
+      }
+    }
+    
+    async function removeDesktopPosition() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(currentDesktopNodeId)}/position`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${API_KEY}` }
+        });
+        
+        if (response.ok) {
+          alert('✅ Posisjon fjernet!');
+          loadDesktopEditData(currentDesktopNodeId);
+          loadNodes();
+        } else {
+          alert('❌ Feil ved fjerning av posisjon');
+        }
+      } catch (error) {
+        console.error('Error removing desktop position:', error);
+        alert('❌ Feil ved fjerning av posisjon');
+      }
+    }
+    
+    async function saveDesktopNotes() {
+      const notes = document.getElementById('desktopNotesTextarea').value.trim();
+      
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(currentDesktopNodeId)}/notes`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`
+          },
+          body: JSON.stringify({ notes })
+        });
+        
+        if (response.ok) {
+          alert('✅ Notater lagret!');
+          loadNodes();
+        } else {
+          alert('❌ Feil ved lagring av notater');
+        }
+      } catch (error) {
+        console.error('Error saving desktop notes:', error);
+        alert('❌ Feil ved lagring av notater');
+      }
+    }
+
+    // Save notes from orbital popup
+    async function savePopupNotes(nodeId) {
+      const notes = document.getElementById(`popup-notes-${nodeId}`).value.trim();
+      
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/node/${encodeURIComponent(nodeId)}/notes`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`
+          },
+          body: JSON.stringify({ notes })
+        });
+        
+        if (response.ok) {
+          alert('✅ Notater lagret!');
+          await loadNodes(); // Reload map data
+          
+          // Close the edit section after saving
+          const editSection = document.getElementById(`edit-section-${nodeId}`);
+          if (editSection) {
+            editSection.style.display = 'none';
+          }
+        } else {
+          alert('❌ Feil ved lagring av notater');
+        }
+      } catch (error) {
+        console.error('Error saving popup notes:', error);
+        alert('❌ Feil ved lagring av notater');
+      }
+    }
+
+    // ==================== ENHANCED SEARCH FUNCTIONALITY ====================
+    
+    // Enhanced search function for bottom search bar
+    function performEnhancedSearch() {
+      const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
+      
+      if (!searchTerm) {
+        renderNodes();
+        return;
+      }
+      
+      let filteredNodes = [];
+      
+      // Search in node names and IDs
+      const nodeResults = allNodes.filter(feature => {
+        const props = feature.properties;
+        const longName = (props.longName || '').toLowerCase();
+        const nodeId = props.nodeId.toLowerCase();
+        
+        return longName.includes(searchTerm) || nodeId.includes(searchTerm);
+      });
+      filteredNodes = filteredNodes.concat(nodeResults);
+      
+      // Search in tags
+      const tagResults = allNodes.filter(feature => {
+        const props = feature.properties;
+        if (props.tags && Array.isArray(props.tags)) {
+          return props.tags.some(tag => tag.tag.toLowerCase().includes(searchTerm));
+        }
+        return false;
+      });
+      
+      // Remove duplicates
+      tagResults.forEach(result => {
+        if (!filteredNodes.find(node => node.properties.nodeId === result.properties.nodeId)) {
+          filteredNodes.push(result);
+        }
+      });
+      
+      // Render filtered results
+      renderFilteredNodes(filteredNodes);
+    }
+    
+    // Apply enhanced search on input
+    document.getElementById('searchInput').addEventListener('input', performEnhancedSearch);
+    
+    // ==================== ADDRESS GEOCODING ==================== 
+    let addressSearchTimeout = null;
+    let selectedSuggestionIndex = -1;
+    let currentSuggestions = [];
+    
+    async function searchAddresses(query) {
+      if (query.length < 3) return [];
+      
+      try {
+        // Using Nominatim (OpenStreetMap) API for geocoding
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&q=${encodeURIComponent(query)}&countrycodes=no,se,fi,dk`, {
+          headers: {
+            'User-Agent': 'MeshtasticNodeMap/1.0'
+          }
+        });
+        
+        if (!response.ok) return [];
+        
+        const results = await response.json();
+        return results.map(result => ({
+          display_name: result.display_name,
+          lat: parseFloat(result.lat),
+          lon: parseFloat(result.lon),
+          type: result.type,
+          importance: result.importance || 0
+        }));
+      } catch (error) {
+        console.error('Geocoding error:', error);
+        return [];
+      }
+    }
+    
+    function handleAddressInput(input, nodeId, type) {
+      const query = input.value.trim();
+      const suggestionsId = `${type}-addr-suggestions-${nodeId}`;
+      const suggestionsDiv = document.getElementById(suggestionsId);
+      
+      // Clear previous timeout
+      if (addressSearchTimeout) {
+        clearTimeout(addressSearchTimeout);
+      }
+      
+      if (query.length < 3) {
+        suggestionsDiv.style.display = 'none';
+        return;
+      }
+      
+      // Show loading
+      suggestionsDiv.innerHTML = '<div class="address-loading">Søker...</div>';
+      suggestionsDiv.style.display = 'block';
+      
+      // Debounce search
+      addressSearchTimeout = setTimeout(async () => {
+        const suggestions = await searchAddresses(query);
+        displayAddressSuggestions(suggestions, nodeId, type);
+      }, 300);
+    }
+    
+    function displayAddressSuggestions(suggestions, nodeId, type) {
+      const suggestionsId = `${type}-addr-suggestions-${nodeId}`;
+      const suggestionsDiv = document.getElementById(suggestionsId);
+      
+      currentSuggestions = suggestions;
+      selectedSuggestionIndex = -1;
+      
+      if (suggestions.length === 0) {
+        suggestionsDiv.innerHTML = '<div class="address-loading">Ingen resultater</div>';
+        return;
+      }
+      
+      const html = suggestions.map((suggestion, index) => {
+        const parts = suggestion.display_name.split(',');
+        const mainText = parts[0];
+        const secondaryText = parts.slice(1).join(',').trim();
+        
+        return `
+          <div class="address-suggestion" data-index="${index}" onclick="selectAddressSuggestion(${index}, '${nodeId}', '${type}')">
+            <div class="main-text">${mainText}</div>
+            <div class="secondary-text">${secondaryText}</div>
+          </div>
+        `;
+      }).join('');
+      
+      suggestionsDiv.innerHTML = html;
+      suggestionsDiv.style.display = 'block';
+    }
+    
+    function selectAddressSuggestion(index, nodeId, type) {
+      if (index < 0 || index >= currentSuggestions.length) return;
+      
+      const suggestion = currentSuggestions[index];
+      const addressInput = document.getElementById(type === 'mobile' ? 'mobileAddress' : `popup-addr-${nodeId}`);
+      const latInput = document.getElementById(type === 'mobile' ? 'mobileLat' : `popup-lat-${nodeId}`);
+      const lonInput = document.getElementById(type === 'mobile' ? 'mobileLon' : `popup-lon-${nodeId}`);
+      
+      // Fill address field
+      addressInput.value = suggestion.display_name;
+      
+      // Fill coordinate fields
+      if (latInput) latInput.value = suggestion.lat.toFixed(6);
+      if (lonInput) lonInput.value = suggestion.lon.toFixed(6);
+      
+      // Hide suggestions
+      const suggestionsId = `${type}-addr-suggestions-${nodeId}`;
+      const suggestionsDiv = document.getElementById(suggestionsId);
+      suggestionsDiv.style.display = 'none';
+      
+      console.log('Selected address:', suggestion.display_name, 'at', suggestion.lat, suggestion.lon);
+    }
+    
+    function handleAddressKeydown(event, nodeId, type) {
+      const suggestionsId = `${type}-addr-suggestions-${nodeId}`;
+      const suggestionsDiv = document.getElementById(suggestionsId);
+      
+      if (suggestionsDiv.style.display === 'none') return;
+      
+      switch (event.key) {
+        case 'ArrowDown':
+          event.preventDefault();
+          selectedSuggestionIndex = Math.min(selectedSuggestionIndex + 1, currentSuggestions.length - 1);
+          updateSuggestionSelection(nodeId, type);
+          break;
+          
+        case 'ArrowUp':
+          event.preventDefault();
+          selectedSuggestionIndex = Math.max(selectedSuggestionIndex - 1, -1);
+          updateSuggestionSelection(nodeId, type);
+          break;
+          
+        case 'Enter':
+          event.preventDefault();
+          if (selectedSuggestionIndex >= 0) {
+            selectAddressSuggestion(selectedSuggestionIndex, nodeId, type);
+          }
+          break;
+          
+        case 'Escape':
+          suggestionsDiv.style.display = 'none';
+          selectedSuggestionIndex = -1;
+          break;
+      }
+    }
+    
+    function updateSuggestionSelection(nodeId, type) {
+      const suggestionsId = `${type}-addr-suggestions-${nodeId}`;
+      const suggestionsDiv = document.getElementById(suggestionsId);
+      const suggestions = suggestionsDiv.querySelectorAll('.address-suggestion');
+      
+      suggestions.forEach((suggestion, index) => {
+        suggestion.classList.toggle('selected', index === selectedSuggestionIndex);
+      });
+    }
+    
+    function showAddressSuggestions(nodeId, type) {
+      // Show suggestions if there's content
+      const addressInput = document.getElementById(type === 'mobile' ? 'mobileAddress' : `popup-addr-${nodeId}`);
+      if (addressInput.value.trim().length >= 3) {
+        const suggestionsId = `${type}-addr-suggestions-${nodeId}`;
+        const suggestionsDiv = document.getElementById(suggestionsId);
+        if (suggestionsDiv.innerHTML.trim()) {
+          suggestionsDiv.style.display = 'block';
+        }
+      }
+    }
+    
+    function hideAddressSuggestions(nodeId, type) {
+      // Delay hiding to allow clicks on suggestions
+      setTimeout(() => {
+        const suggestionsId = `${type}-addr-suggestions-${nodeId}`;
+        const suggestionsDiv = document.getElementById(suggestionsId);
+        suggestionsDiv.style.display = 'none';
+      }, 200);
+    }
+    
+    // Responsive popup configuration
+    function getResponsivePopupOptions() {
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      
+      // Orbital popup needs more space - adapt to different screen sizes
+      let orbitalSize = 600;
+      if (viewportWidth < 768) orbitalSize = 400;
+      if (viewportWidth < 480) orbitalSize = 320;
+      
+      // orbital-center is positioned at top: 50%; left: 50% with transform: translate(-50%, -50%)
+      // This means its CENTER is at exactly orbitalSize/2 from top-left of container
+      // We need to offset the popup so this point lands on the marker position
+      // Negative offset moves popup left/up (like iconAnchor for markers)
+      const centerOffset = orbitalSize / 2;
+      
+      return {
+        maxWidth: Math.min(orbitalSize + 40, viewportWidth * 0.95),
+        maxHeight: Math.min(orbitalSize + 40, viewportHeight * 0.90),
+        autoPan: false,
+        keepInView: false,
+        closeOnEscapeKey: true,
+        // Offset to align orbital-center with marker - same principle as iconAnchor
+        offset: [0, -centerOffset],  // Only Y offset - X is handled by Leaflet centering
+        className: 'orbital-popup',
+        autoClose: false,
+        closeOnClick: false
+      };
+    }
+    
+    // Update popup sizes on window resize - DON'T close popup
+    window.addEventListener('resize', function() {
+      // Popup will adjust automatically, no need to close
+      // Removed: map.closePopup();
+    });
+    
+    // Create a node marker with all standard styling and functionality
+    function createNodeMarker(lat, lon, props) {
+      const isFav = favorites.has(props.nodeId);
+      
+      // Determine color based on status
+      let color = '#999999';  // Default grey for unknown/offline
+      if (isFav) {
+        color = '#3388ff';  // Blue for favorites
+      } else if (props.status === 'online') {
+        color = '#4CAF50';  // Green for online
+      } else if (props.status === 'recent') {
+        color = '#FFA726';  // Orange/yellow for recent
+      } else {
+        color = '#999999';  // Grey for offline/unknown
+      }
+      
+      // Determine if local node (USB/WiFi) or global (MQTT)
+      const isLocal = props.source && (props.source.includes('USB') || props.source.includes('WiFi'));
+      
+      // Add permanent label
+      const labelText = props.longName || props.shortName || props.nodeId.substring(1, 5);
+      
+      // Calculate radius based on label text length to ensure text fits inside circle
+      // Font is 12px, average character width ~7-8px, need diameter to fit text
+      const textWidth = labelText.length * 8;  // Increased from 7 to 8px per char
+      const padding = 16;  // Extra padding for better fit
+      const minRadius = Math.max((textWidth + padding) / 2, isFav ? 8 : (isLocal ? 7 : 6));
+      const calculatedRadius = Math.ceil(minRadius);
+      
+      const marker = L.circleMarker([lat, lon], {
+        radius: calculatedRadius,
+        fillColor: color,
+        color: isLocal ? '#000' : '#fff',  // Black ring for local, white for MQTT
+        weight: isLocal ? 2.5 : 1.5,
+        opacity: 1,
+        fillOpacity: isLocal ? 0.9 : 0.7
+      });
+      
+      // Add permanent label (reusing labelText from above)
+      let labelClass = 'node-label';
+      if (isFav) labelClass += ' favorite';
+      else if (props.status === 'online') labelClass += ' online';
+      else if (props.status === 'recent') labelClass += ' recent';
+      else labelClass += ' offline';
+      
+      const label = L.marker([lat, lon], {
+        icon: L.divIcon({
+          className: labelClass,
+          html: labelText,
+          iconSize: null,
+          iconAnchor: [-8, 18]
+        })
+      });
+      
+      // Only show labels at zoom level 10+
+      const currentZoom = map.getZoom();
+      if (currentZoom >= 10) {
+        label.addTo(nodesLayer);
+      }
+      
+      // Store reference to marker in label for click handling
+      label._nodeMarker = marker;
+      
+      // Make label clickable with two-step interaction (same as main system)
+      label.on('click', function(e) {
+        L.DomEvent.stopPropagation(e);
+        
+        // Check if this node is already zoomed to
+        if (lastZoomedNode === props.nodeId && map.getZoom() >= 15) {
+          // Second click on same zoomed node: Show pod overlay
+          console.log('Second click - showing pods for:', props.nodeId);
+          showPodOverlay(props.nodeId, marker, {...props, isFavorite: isFav});
+        } else {
+          // First click: Zoom to node
+          console.log('First click - zooming to:', props.nodeId);
+          lastZoomedNode = props.nodeId;
+          
+          // Smooth zoom to node (same as main renderNodes system)
+          map.flyTo([lat, lon], 16, {
+            animate: true,
+            duration: 0.8,
+            easeLinearity: 0.25
+          });
+        }
+      });
+      
+      // Update label visibility on zoom
+      marker._labelMarker = label;
+      
+      // Make marker itself clickable with same two-step logic
+      marker.on('click', function(e) {
+        L.DomEvent.stopPropagation(e);
+        
+        // Check if this node is already zoomed to
+        if (lastZoomedNode === props.nodeId && map.getZoom() >= 15) {
+          // Second click on same zoomed node: Show pod overlay
+          console.log('Second click on marker - showing pods for:', props.nodeId);
+          showPodOverlay(props.nodeId, marker, {...props, isFavorite: isFav});
+        } else {
+          // First click: Zoom to node
+          console.log('First click on marker - zooming to:', props.nodeId);
+          lastZoomedNode = props.nodeId;
+          
+          // Smooth zoom to node
+          map.flyTo([lat, lon], 16, {
+            animate: true,
+            duration: 0.8,
+            easeLinearity: 0.25
+          });
+        }
+      });
+      
+      // Add popup with responsive configuration (for backward compatibility)
+      const popupProps = {...props, isFavorite: isFav};
+      marker.bindPopup(createPopupContent(popupProps), getResponsivePopupOptions());
+      
+      return marker;
+    }
+    
+    // Update renderNodes to handle search mode
+    function renderFilteredNodes(filteredNodes) {
+      nodesLayer.clearLayers();
+      
+      filteredNodes.forEach(feature => {
+        if (feature.geometry && feature.geometry.coordinates) {
+          const lat = feature.geometry.coordinates[1];
+          const lon = feature.geometry.coordinates[0];
+          
+          const props = feature.properties;
+          const isFav = favorites.has(props.nodeId);
+          props.isFavorite = isFav;
+          
+          // Create marker
+          const marker = createNodeMarker(lat, lon, props);
+          marker.addTo(nodesLayer);
+        }
+      });
+      
+      updateStatistics();
+      updateFavoritesBar();
+      
+      // No auto-zoom after search - let user click to zoom
+      // This allows searching for multiple nodes and choosing which one to zoom to
+    }
+  </script>
+</body>
+</html>
