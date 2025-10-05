@@ -59,3 +59,4 @@ node_modules/
 # Test files
 test_*.html
 *_test.py
+secrets/backups/
