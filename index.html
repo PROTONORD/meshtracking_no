@@ -1,16 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <!-- VERSION: 3.11.0 - Radio/MQTT source filtering with priority logic -->
+  <!-- VERSION: 3.29.0 - Region detection implemented: radio nodes now report their LoRa region from device config -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=0.5, minimum-scale=0.3, maximum-scale=2.0, user-scalable=yes">
   <meta name="format-detection" content="telephone=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>Meshtastic Map v3.11.0 - Radio/MQTT Sources</title>
+  <title>Meshtastic Map v3.15.0 - Device Detection</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <style>
@@ -145,6 +146,8 @@
       display: flex;
       gap: 10px;
       align-items: center;
+      justify-content: center; /* Center all items */
+      flex-wrap: wrap; /* Allow wrapping if needed */
       font-size: 0.85em;
     }
     
@@ -189,17 +192,19 @@
       left: 0;
       right: 0;
       background: white;
-      padding: 10px;
+      padding: 8px 10px;
       box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
       display: flex;
-      gap: 10px;
+      gap: 8px;
       align-items: center;
       justify-content: center;
       z-index: 1000;
+      flex-wrap: nowrap; /* Never wrap to new line */
     }
     
-    .search-bar input[type="text"] {
-      flex: 0 1 400px;
+    .search-bar input[type="text"]#searchInput {
+      flex: 1 1 auto;
+      min-width: 150px;
       max-width: 400px;
       padding: 10px 16px;
       border: 2px solid #ddd;
@@ -208,9 +213,20 @@
       transition: border-color 0.2s;
     }
     
-    .search-bar input[type="text"]:focus {
+    .search-bar > div {
+      flex: 1 1 auto;
+      min-width: 150px;
+      max-width: 250px;
+    }
+    
+    .search-bar input[type="text"]#searchInput:focus {
       outline: none;
       border-color: #2196F3;
+    }
+    
+    .search-bar input[type="text"]#locationSearch:focus {
+      outline: none;
+      border-color: #4CAF50;
     }
     
     /* Source filter (bottom right) */
@@ -247,6 +263,33 @@
       width: 16px;
       height: 16px;
       cursor: pointer;
+    }
+    
+    .location-suggestion {
+      padding: 10px 12px;
+      cursor: pointer;
+      border-bottom: 1px solid #f0f0f0;
+      transition: background 0.2s;
+      font-size: 14px;
+    }
+    
+    .location-suggestion:hover {
+      background: #f5f5f5;
+    }
+    
+    .location-suggestion:last-child {
+      border-bottom: none;
+    }
+    
+    .location-name {
+      font-weight: 600;
+      font-size: 0.95em;
+      color: #333;
+    }
+    
+    .location-details {
+      font-size: 0.8em;
+      color: #666;
     }
     
     .source-option span {
@@ -340,11 +383,11 @@
     }
     
     /* Improved X close button */
-    /* Popup edit button (pencil) - next to close button */
-    .leaflet-popup-edit-button {
+    /* Popup favorite button (star) - to the left of close button */
+    .leaflet-popup-favorite-button {
       position: absolute !important;
-      background: rgba(0, 0, 0, 0.85) !important;
-      border: 2px solid #FFD700 !important;
+      background: rgba(255, 255, 255, 0.95) !important;
+      border: 2px solid #666 !important;
       border-radius: 50% !important;
       width: 32px !important;
       height: 32px !important;
@@ -360,11 +403,26 @@
       transition: all 0.2s !important;
       z-index: 10000 !important;
       cursor: pointer !important;
+      color: #666 !important;
     }
     
-    .leaflet-popup-edit-button:hover {
-      background: rgba(255, 215, 0, 0.95) !important;
+    .leaflet-popup-favorite-button:hover {
+      background: rgba(255, 255, 255, 0.95) !important;
+      border-color: #FFD700 !important;
+      color: #FFD700 !important;
+      transform: scale(1.1) !important;
+    }
+    
+    .leaflet-popup-favorite-button.active {
+      background: rgba(255, 255, 255, 0.95) !important;
+      border-color: #FFD700 !important;
+      color: #FFD700 !important;
+    }
+    
+    .leaflet-popup-favorite-button.active:hover {
+      background: rgba(255, 255, 255, 0.95) !important;
       border-color: #FFA500 !important;
+      color: #FFA500 !important;
       transform: scale(1.1) !important;
     }
     
@@ -561,6 +619,47 @@
     }
     
     /* Close button for overlay */
+    .overlay-favorite-button {
+      position: fixed;
+      top: 20px;
+      right: 80px;
+      width: 50px;
+      height: 50px;
+      background: rgba(255, 255, 255, 0.95);
+      border: 2px solid #666;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      cursor: pointer;
+      z-index: 10002;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      transition: all 0.2s ease;
+      pointer-events: auto;
+      color: #666;
+    }
+    
+    .overlay-favorite-button:hover {
+      background: rgba(255, 255, 255, 0.95);
+      border-color: #FFD700;
+      color: #FFD700;
+      transform: scale(1.1);
+    }
+    
+    .overlay-favorite-button.active {
+      background: rgba(255, 255, 255, 0.95);
+      border-color: #FFD700;
+      color: #FFD700;
+    }
+    
+    .overlay-favorite-button.active:hover {
+      background: rgba(255, 255, 255, 0.95);
+      border-color: #FFA500;
+      color: #FFA500;
+      transform: scale(1.1);
+    }
+    
     .overlay-close-button {
       position: fixed;
       top: 20px;
@@ -961,18 +1060,8 @@
       background: #999;
     }
     
-    .node-label.favorite {
-      border-color: #3388ff;
-      color: #1565c0;
-      font-weight: 700;
-      background: rgba(51, 136, 255, 0.05);
-    }
-    
-    .node-label.favorite::before {
-      background: #3388ff;
-      border-color: #fff;
-      box-shadow: 0 0 0 1px #3388ff;
-    }
+    /* Node label styling for favorites - REMOVED, favorites use status colors only */
+    /* Old .node-label.favorite styles removed in v3.27.7 */
     
     /* Stacked label positioning */
     .node-label.stacked-1 {
@@ -1418,7 +1507,692 @@
       }
     }
 
-    /* ==================== MOBILE RESPONSIVE ==================== */
+    /* ==================== MOBILE DEVICE DETECTION (JS-based) ==================== */
+    /* Top bar - Legend and filters */
+    .is-mobile-device .legend-bar {
+      padding: 16px !important;
+      font-size: 1.3em !important;
+      gap: 14px !important;
+      min-height: 60px !important;
+    }
+    
+    .is-mobile-device .dropdown-trigger {
+      padding: 16px 24px !important;
+      font-size: 1.25em !important;
+      min-height: 54px !important;
+      border-width: 2px !important;
+    }
+    
+    .is-mobile-device .source-filter {
+      padding: 16px 24px !important;
+      font-size: 1.25em !important;
+      min-height: 54px !important;
+      border-width: 2px !important;
+    }
+    
+    .is-mobile-device .source-option {
+      font-size: 1.3em !important;
+      padding: 16px 12px !important;
+      min-height: 54px !important;
+    }
+    
+    .is-mobile-device .source-option input[type="checkbox"] {
+      width: 28px !important;
+      height: 28px !important;
+      margin-right: 16px !important;
+    }
+    
+    .is-mobile-device .source-option label {
+      font-size: 1.1em !important;
+      line-height: 1.4 !important;
+    }
+    
+    /* Bottom search bar */
+    .is-mobile-device .search-bar {
+      padding: 16px 14px !important;
+      gap: 14px !important;
+      min-height: 70px !important;
+    }
+    
+    /* More specific selectors to override ID-based styles */
+    .is-mobile-device .search-bar input[type="text"]#searchInput {
+      font-size: 19px !important;
+      padding: 18px 24px !important;
+      min-height: 58px !important;
+      box-sizing: border-box !important;
+      border-width: 3px !important;
+      border-radius: 10px !important;
+    }
+    
+    .is-mobile-device .search-bar input[type="text"]#locationSearch {
+      font-size: 19px !important;
+      padding: 18px 48px 18px 24px !important;
+      min-height: 58px !important;
+      box-sizing: border-box !important;
+      border-width: 3px !important;
+      border-radius: 10px !important;
+    }
+    
+    .is-mobile-device #clearLocation {
+      font-size: 30px !important;
+      width: 46px !important;
+      height: 46px !important;
+      right: 6px !important;
+      line-height: 46px !important;
+    }
+    
+    .is-mobile-device .location-suggestion {
+      padding: 20px !important;
+      font-size: 19px !important;
+      min-height: 58px !important;
+    }
+    
+    .is-mobile-device .location-name {
+      font-size: 1.15em !important;
+      font-weight: 600 !important;
+    }
+    
+    .is-mobile-device .location-details {
+      font-size: 1em !important;
+      margin-top: 6px !important;
+    }
+    
+    /* Buttons and interactive elements */
+    .is-mobile-device button,
+    .is-mobile-device .button,
+    .is-mobile-device input[type="button"],
+    .is-mobile-device input[type="submit"] {
+      font-size: 19px !important;
+      padding: 16px 28px !important;
+      min-height: 54px !important;
+      min-width: 54px !important;
+      border-radius: 10px !important;
+    }
+    
+    /* Map controls */
+    .is-mobile-device .leaflet-control-zoom a {
+      width: 50px !important;
+      height: 50px !important;
+      line-height: 50px !important;
+      font-size: 28px !important;
+    }
+    
+    .is-mobile-device .leaflet-control-layers-toggle {
+      width: 50px !important;
+      height: 50px !important;
+    }
+    
+    /* Node list and cards */
+    .is-mobile-device .node-item {
+      font-size: 19px !important;
+      padding: 18px !important;
+      min-height: 58px !important;
+    }
+    
+    .is-mobile-device .node-name {
+      font-size: 1.2em !important;
+      font-weight: 600 !important;
+    }
+    
+    .is-mobile-device .node-details {
+      font-size: 1em !important;
+      line-height: 1.7 !important;
+    }
+    
+    /* Popup content */
+    .is-mobile-device .leaflet-popup-content {
+      font-size: 18px !important;
+      line-height: 1.7 !important;
+      min-width: 220px !important;
+      padding: 16px !important;
+    }
+    
+    .is-mobile-device .leaflet-popup-content strong {
+      font-size: 1.15em !important;
+    }
+    
+    /* ==================== MOBILE BURGER MENU ==================== */
+    .mobile-menu-button {
+      display: none; /* Hidden by default */
+    }
+    
+    .is-mobile-device .mobile-menu-button {
+      display: block !important;
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 90px;
+      height: 90px;
+      background: transparent;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      z-index: 1001;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+    }
+    
+    .is-mobile-device .mobile-menu-button:active {
+      transform: scale(0.92);
+    }
+    
+    .is-mobile-device .mobile-menu-button .menu-icon {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      width: 60px;
+    }
+    
+    .is-mobile-device .mobile-menu-button .menu-icon span {
+      display: block;
+      height: 8px;
+      background: #000;
+      border-radius: 3px;
+      transition: all 0.3s ease;
+    }
+    
+    .is-mobile-device .mobile-menu-button.active .menu-icon span:nth-child(1) {
+      transform: rotate(45deg) translate(11px, 11px);
+    }
+    
+    .is-mobile-device .mobile-menu-button.active .menu-icon span:nth-child(2) {
+      opacity: 0;
+    }
+    
+    .is-mobile-device .mobile-menu-button.active .menu-icon span:nth-child(3) {
+      transform: rotate(-45deg) translate(11px, -11px);
+    }
+    
+    /* Mobile menu overlay */
+    .mobile-menu-overlay {
+      display: none; /* Hidden by default */
+    }
+    
+    .is-mobile-device .mobile-menu-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 999;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    
+    .is-mobile-device .mobile-menu-overlay.active {
+      display: block !important;
+      opacity: 1;
+    }
+    
+    /* Mobile menu panel */
+    .mobile-menu-panel {
+      display: none; /* Hidden by default */
+    }
+    
+    .is-mobile-device .mobile-menu-panel {
+      display: block;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      max-height: 75vh;
+      background: rgba(255, 255, 255, 0.50);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius: 24px 24px 0 0;
+      box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.2);
+      z-index: 1000;
+      transform: translateY(100%);
+      transition: transform 0.3s ease;
+      overflow-y: auto;
+      padding-bottom: env(safe-area-inset-bottom, 0);
+    }
+    
+    .is-mobile-device .mobile-menu-panel.active {
+      transform: translateY(0);
+    }
+    
+    .is-mobile-device .mobile-menu-header {
+      position: sticky;
+      top: 0;
+      background: white;
+      padding: 20px;
+      border-bottom: 1px solid #e0e0e0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 1;
+    }
+    
+    .is-mobile-device .mobile-menu-header h2 {
+      margin: 0;
+      font-size: 1.5em;
+      color: #333;
+    }
+    
+    .is-mobile-device .mobile-menu-content {
+      padding: 20px;
+    }
+    
+    .is-mobile-device .mobile-menu-section {
+      margin-bottom: 30px;
+    }
+    
+    .is-mobile-device .mobile-menu-section h3 {
+      font-size: 1.2em;
+      color: #666;
+      margin: 0 0 16px 0;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+    }
+    
+    .is-mobile-device .mobile-search-input {
+      width: 100%;
+      font-size: 19px !important;
+      padding: 18px 24px !important;
+      border: 3px solid #ddd !important;
+      border-radius: 12px !important;
+      box-sizing: border-box;
+      margin-bottom: 12px;
+    }
+    
+    .is-mobile-device .mobile-search-input:focus {
+      outline: none;
+      border-color: #2196F3 !important;
+    }
+    
+    .is-mobile-device .mobile-filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    .is-mobile-device .mobile-filter-button {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 20px;
+      background: #f5f5f5;
+      border: 2px solid #ddd;
+      border-radius: 12px;
+      font-size: 18px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .is-mobile-device .mobile-filter-button:active {
+      background: #e0e0e0;
+      transform: scale(0.98);
+    }
+    
+    .is-mobile-device .mobile-filter-button.active {
+      background: #E3F2FD;
+      border-color: #2196F3;
+      color: #1976D2;
+      font-weight: 600;
+    }
+    
+    .is-mobile-device .mobile-checkbox-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    
+    .is-mobile-device .mobile-checkbox-item {
+      display: flex;
+      align-items: center;
+      padding: 16px;
+      background: #f9f9f9;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    
+    .is-mobile-device .mobile-checkbox-item:active {
+      background: #e8e8e8;
+    }
+    
+    .is-mobile-device .mobile-checkbox-item input[type="checkbox"] {
+      width: 28px !important;
+      height: 28px !important;
+      margin-right: 16px !important;
+      cursor: pointer;
+    }
+    
+    .is-mobile-device .mobile-checkbox-item label {
+      font-size: 18px;
+      cursor: pointer;
+      flex: 1;
+    }
+    
+    /* Hide desktop elements on mobile */
+    .is-mobile-device .legend-bar {
+      display: none !important;
+    }
+    
+    .is-mobile-device .search-bar {
+      display: none !important;
+    }
+
+    /* ==================== TOP LEFT: SOURCE MENU (WIFI ICON) ==================== */
+    .source-menu-button {
+      display: none; /* Hidden by default */
+    }
+    
+    .is-mobile-device .source-menu-button {
+      display: block !important;
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      width: 90px;
+      height: 90px;
+      background: transparent;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      z-index: 1001;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+      font-size: 80px;
+      line-height: 1;
+      font-weight: normal;
+    }
+    
+    .is-mobile-device .source-menu-button:active {
+      transform: scale(0.92);
+    }
+    
+    /* Source menu overlay */
+    .source-menu-overlay {
+      display: none; /* Hidden by default */
+    }
+    
+    .is-mobile-device .source-menu-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 999;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    
+    .is-mobile-device .source-menu-overlay.active {
+      display: block !important;
+      opacity: 1;
+    }
+    
+    /* Source menu panel */
+    .source-menu-panel {
+      display: none; /* Hidden by default */
+    }
+    
+    .is-mobile-device .source-menu-panel {
+      display: block;
+      position: fixed;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%) translateX(-100%);
+      width: 300px;
+      max-width: 80vw;
+      background: rgba(255, 255, 255, 0.50);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius: 0 24px 24px 0;
+      box-shadow: 4px 0 20px rgba(0, 0, 0, 0.2);
+      z-index: 1000;
+      transition: transform 0.3s ease;
+      padding: 30px 20px;
+    }
+    
+    .is-mobile-device .source-menu-panel.active {
+      transform: translateY(-50%) translateX(0);
+    }
+    
+    .is-mobile-device .source-menu-panel h2 {
+      margin: 0 0 24px 0;
+      font-size: 1.5em;
+      color: #333;
+    }
+    
+    .is-mobile-device .source-menu-panel .mobile-checkbox-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    
+    .is-mobile-device .source-menu-panel .mobile-checkbox-item {
+      display: flex;
+      align-items: center;
+      padding: 18px;
+      background: rgba(249, 249, 249, 0.8);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    
+    .is-mobile-device .source-menu-panel .mobile-checkbox-item:active {
+      background: rgba(232, 232, 232, 0.9);
+    }
+    
+    .is-mobile-device .source-menu-panel .mobile-checkbox-item input[type="checkbox"] {
+      width: 32px !important;
+      height: 32px !important;
+      margin-right: 16px !important;
+      cursor: pointer;
+    }
+    
+    .is-mobile-device .source-menu-panel .mobile-checkbox-item label {
+      font-size: 19px;
+      cursor: pointer;
+      flex: 1;
+      font-weight: 500;
+    }
+
+    /* ==================== TOP RIGHT: STATUS MENU (CIRCLES) ==================== */
+    .status-menu-button {
+      display: none; /* Hidden by default */
+    }
+    
+    .is-mobile-device .status-menu-button {
+      display: block !important;
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 90px;
+      height: 90px;
+      background: transparent;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      z-index: 1001;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+    }
+    
+    .is-mobile-device .status-menu-button:active {
+      transform: scale(0.92);
+    }
+    
+    .is-mobile-device .status-menu-button .status-circles {
+      display: flex;
+      gap: 12px;
+    }
+    
+    .is-mobile-device .status-menu-button .status-circles span {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      transition: all 0.3s ease;
+    }
+    
+    .is-mobile-device .status-menu-button .status-circles span:nth-child(1) {
+      background: #4CAF50; /* Green */
+    }
+    
+    .is-mobile-device .status-menu-button .status-circles span:nth-child(2) {
+      background: #FFC107; /* Yellow */
+    }
+    
+    .is-mobile-device .status-menu-button .status-circles span:nth-child(3) {
+      background: #F44336; /* Red */
+    }
+    
+    /* Status menu overlay */
+    .status-menu-overlay {
+      display: none;
+    }
+    
+    .is-mobile-device .status-menu-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 999;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    
+    .is-mobile-device .status-menu-overlay.active {
+      display: block !important;
+      opacity: 1;
+    }
+    
+    /* Status menu panel */
+    .status-menu-panel {
+      display: none;
+    }
+    
+    .is-mobile-device .status-menu-panel {
+      display: block;
+      position: fixed;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%) translateX(100%);
+      width: 300px;
+      max-width: 80vw;
+      background: rgba(255, 255, 255, 0.50);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius: 24px 0 0 24px;
+      box-shadow: -4px 0 20px rgba(0, 0, 0, 0.2);
+      z-index: 1000;
+      transition: transform 0.3s ease;
+      padding: 30px 20px;
+    }
+    
+    .is-mobile-device .status-menu-panel.active {
+      transform: translateY(-50%) translateX(0);
+    }
+    
+    .is-mobile-device .status-menu-panel h2 {
+      margin: 0 0 24px 0;
+      font-size: 1.5em;
+      color: #333;
+    }
+
+    /* ==================== BOTTOM LEFT: FAVORITES MENU ==================== */
+    .favorites-menu-button {
+      display: none;
+    }
+    
+    .is-mobile-device .favorites-menu-button {
+      display: block !important;
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      width: 90px;
+      height: 90px;
+      background: transparent;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      z-index: 1001;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+      font-size: 80px;
+      line-height: 1;
+      font-weight: normal;
+    }
+    
+    .is-mobile-device .favorites-menu-button:active {
+      transform: scale(0.92);
+    }
+    
+    /* Favorites menu overlay */
+    .favorites-menu-overlay {
+      display: none;
+    }
+    
+    .is-mobile-device .favorites-menu-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 999;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    
+    .is-mobile-device .favorites-menu-overlay.active {
+      display: block !important;
+      opacity: 1;
+    }
+    
+    /* Favorites menu panel */
+    .favorites-menu-panel {
+      display: none;
+    }
+    
+    .is-mobile-device .favorites-menu-panel {
+      display: block;
+      position: fixed;
+      left: 0;
+      bottom: 0;
+      transform: translateY(100%);
+      width: 100%;
+      max-height: 40vh;
+      background: rgba(255, 255, 255, 0.50);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius: 24px 24px 0 0;
+      box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.2);
+      z-index: 1000;
+      transition: transform 0.3s ease;
+      padding: 30px 20px;
+    }
+    
+    .is-mobile-device .favorites-menu-panel.active {
+      transform: translateY(0);
+    }
+    
+    .is-mobile-device .favorites-menu-panel h2 {
+      margin: 0 0 24px 0;
+      font-size: 1.5em;
+      color: #333;
+    }
+
+    /* ==================== BOTTOM RIGHT: MAIN MENU (SEARCH + LOCATION) ==================== */
     @media (max-width: 768px) {
       /* Hide sidebar toggle on mobile since we use the mobile modal */
       .sidebar-toggle {
@@ -1443,42 +2217,85 @@
       }
       
       .favorites-bar {
-        padding: 6px 8px;
+        padding: 8px;
       }
       
       .legend-bar {
-        padding: 6px 8px;
-        font-size: 0.8em;
+        padding: 8px;
+        font-size: 0.95em; /* Larger text on mobile */
         flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+      }
+      
+      .dropdown-trigger {
+        padding: 8px 14px; /* Bigger touch targets */
+        font-size: 0.95em;
+      }
+      
+      .source-filter {
+        padding: 8px 14px;
+        font-size: 0.95em;
+        gap: 10px;
+      }
+      
+      .source-option {
+        font-size: 1em;
+      }
+      
+      .source-option input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
       }
       
       .filter-badge {
-        font-size: 0.75em;
-        padding: 3px 8px;
+        font-size: 0.85em;
+        padding: 6px 10px;
       }
       
       /* Bottom search bar */
       .search-bar {
-        flex-wrap: wrap;
-        padding: 8px;
+        flex-wrap: nowrap;
+        padding: 10px 8px; /* More padding for easier touch */
         gap: 8px;
       }
       
-      .search-bar input,
-      .search-bar select {
-        flex: 1 1 45%;
-        min-width: 0;
-        font-size: 0.85em;
+      .search-bar input[type="text"]#searchInput {
+        flex: 1 1 auto;
+        min-width: 120px;
+        max-width: none;
+        font-size: 16px; /* Larger text for readability */
+        padding: 12px 14px; /* Bigger touch target */
       }
       
-      .search-bar label {
-        flex: 1 1 40%;
-        font-size: 0.85em;
+      .search-bar > div {
+        flex: 1 1 auto;
+        min-width: 120px;
+        max-width: none;
       }
       
-      .search-bar button {
-        flex: 1 1 100%;
-        padding: 10px;
+      .search-bar input[type="text"]#locationSearch {
+        font-size: 16px; /* Match searchInput size */
+        padding: 12px 32px 12px 14px; /* Bigger touch target */
+      }
+      
+      #clearLocation {
+        font-size: 20px !important; /* Bigger X button */
+        right: 10px !important;
+      }
+      
+      .location-suggestion {
+        padding: 14px 16px; /* Bigger touch targets */
+        font-size: 16px;
+      }
+      
+      .location-name {
+        font-size: 1em;
+      }
+      
+      .location-details {
+        font-size: 0.85em;
+        margin-top: 2px;
       }
       
       /* Tag input group mobile */
@@ -1620,14 +2437,19 @@
       }
       
       .legend-bar {
-        padding: 4px 6px;
-        gap: 6px;
+        padding: 8px;
+        gap: 8px;
         flex-wrap: wrap;
+        justify-content: center;
       }
       
       .dropdown-trigger {
-        font-size: 0.8em;
-        padding: 5px 10px;
+        font-size: 0.9em;
+        padding: 8px 12px;
+      }
+      
+      .source-filter {
+        padding: 8px 12px;
       }
       
       .dropdown-menu {
@@ -1637,6 +2459,7 @@
       .legend-bar {
         padding: 6px;
         gap: 6px;
+        justify-content: center;
       }
       
       .search-container {
@@ -1751,15 +2574,29 @@
       
       .legend-bar {
         flex-wrap: wrap;
-        gap: 2px;
-        padding: 6px;
+        gap: 4px;
+        padding: 8px;
+        justify-content: center;
+      }
+      
+      .dropdown-trigger {
+        font-size: 0.85em;
+        padding: 8px 10px;
+      }
+      
+      .source-filter {
+        padding: 8px 10px;
+        font-size: 0.85em;
+      }
+      
+      .source-option input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
       }
       
       .legend-bar .filter-badge {
-        flex: 1;
-        min-width: 40px;
-        padding: 3px 4px;
-        font-size: 9px;
+        padding: 6px 8px;
+        font-size: 0.8em;
       }
       
       .search-container input {
@@ -2156,6 +2993,7 @@
   
   <!-- Pod overlay container -->
   <div id="mapPodOverlay" class="map-pod-overlay">
+    <div class="overlay-favorite-button" id="overlayFavoriteButton" onclick="toggleOverlayFavorite()">☆</div>
     <div class="overlay-close-button" onclick="closePodOverlay()">✕</div>
     <div id="podContainer"></div>
   </div>
@@ -2169,10 +3007,531 @@
   <!-- Bottom search bar -->
   <div class="search-bar">
     <input id="searchInput" type="text" placeholder="Søk node eller tag..." autocomplete="off">
+    <select id="desktopRegionFilter" style="padding: 10px; border: 2px solid #ddd; border-radius: 8px; font-size: 15px; cursor: pointer; min-width: 200px;">
+      <option value="">🌍 Alle regioner</option>
+      <option value="EU_868">🇪🇺 Europa (EU_868)</option>
+      <option value="US">🇺🇸 USA</option>
+      <option value="PL">🇵🇱 Polen</option>
+      <option value="CZ">🇨🇿 Tsjekkia</option>
+      <option value="TW">🇹🇼 Taiwan</option>
+      <option value="KR">🇰🇷 Sør-Korea</option>
+      <option value="TH">🇹🇭 Thailand</option>
+      <option value="BR">🇧🇷 Brasil</option>
+      <option value="MX">🇲🇽 Mexico</option>
+      <option value="msk">🇷🇺 Moskva</option>
+    </select>
+  </div>
+  
+  <!-- TOP LEFT: Source Filter Menu Button (WiFi icon) -->
+  <button class="source-menu-button" id="sourceMenuButton">
+    ●
+  </button>
+  
+  <!-- Source Menu Overlay -->
+  <div class="source-menu-overlay" id="sourceMenuOverlay"></div>
+  
+  <!-- Source Menu Panel (MOBILE - NOT USED IN DESKTOP MODE) -->
+  <div class="source-menu-panel" id="sourceMenuPanel" style="display: none;">
+    <h2>📶 Kilde</h2>
+    <div class="mobile-checkbox-list">
+      <div class="mobile-checkbox-item">
+        <input type="checkbox" id="sourceRadioMobile" checked>
+        <label for="sourceRadioMobile">📻 Radio</label>
+      </div>
+      <div class="mobile-checkbox-item">
+        <input type="checkbox" id="sourceMQTTMobile" checked>
+        <label for="sourceMQTTMobile">📡 MQTT</label>
+      </div>
+    </div>
+  </div>
+  
+  <!-- TOP RIGHT: Status Filter Menu Button (Circles) -->
+  <button class="status-menu-button" id="statusMenuButton">
+    <div class="status-circles">
+      <span></span>
+      <span></span>
+      <span></span>
+    </div>
+  </button>
+  
+  <!-- Status Menu Overlay -->
+  <div class="status-menu-overlay" id="statusMenuOverlay"></div>
+  
+  <!-- Status Menu Panel -->
+  <div class="status-menu-panel" id="statusMenuPanel">
+    <h2>� Status</h2>
+    <div class="mobile-filter-group">
+      <button class="mobile-filter-button active" id="mobileStatusAll" data-status="all">
+        <span>Alle statuser</span>
+        <span>✓</span>
+      </button>
+      <button class="mobile-filter-button" id="mobileStatusOnline" data-status="online">
+        <span>🟢 Online</span>
+        <span></span>
+      </button>
+      <button class="mobile-filter-button" id="mobileStatusRecent" data-status="recent">
+        <span>🟡 Recent</span>
+        <span></span>
+      </button>
+      <button class="mobile-filter-button" id="mobileStatusOffline" data-status="offline">
+        <span>🔴 Offline</span>
+        <span></span>
+      </button>
+    </div>
+  </div>
+  
+  <!-- BOTTOM LEFT: Favorites Menu Button (Star icon) -->
+  <button class="favorites-menu-button" id="favoritesMenuButton">
+    ♥
+  </button>
+  
+  <!-- Favorites Menu Overlay -->
+  <div class="favorites-menu-overlay" id="favoritesMenuOverlay"></div>
+  
+  <!-- Favorites Menu Panel -->
+  <div class="favorites-menu-panel" id="favoritesMenuPanel">
+    <h2>⭐ Favoritter</h2>
+    <div class="mobile-filter-group">
+      <button class="mobile-filter-button active" id="mobileFavoritesAll" data-filter="all">
+        <span>Alle noder</span>
+        <span>✓</span>
+      </button>
+      <button class="mobile-filter-button" id="mobileFavoritesOnly" data-filter="favorites">
+        <span>Kun favoritter</span>
+        <span></span>
+      </button>
+      <button class="mobile-filter-button" id="mobileFavoritesExclude" data-filter="exclude">
+        <span>Ekskluder favoritter</span>
+        <span></span>
+      </button>
+    </div>
+  </div>
+  
+  <!-- BOTTOM RIGHT: Main Menu Button (Burger) -->
+  <button class="mobile-menu-button" id="mobileMenuButton">
+    <div class="menu-icon">
+      <span></span>
+      <span></span>
+      <span></span>
+    </div>
+  </button>
+  
+  <!-- Mobile Menu Overlay -->
+  <div class="mobile-menu-overlay" id="mobileMenuOverlay"></div>
+  
+  <!-- Mobile Menu Panel -->
+  <div class="mobile-menu-panel" id="mobileMenuPanel">
+    <div class="mobile-menu-header">
+      <h2>🔍 Søk & Filter</h2>
+    </div>
+    
+    <div class="mobile-menu-content">
+      <!-- Search Section -->
+      <div class="mobile-menu-section">
+        <h3>🔍 Søk</h3>
+        <input type="text" class="mobile-search-input" id="mobileSearchInput" placeholder="Søk node eller tag...">
+      </div>
+      
+      <!-- Region Filter Section (MQTT Topics) -->
+      <div class="mobile-menu-section">
+        <h3>🌍 Region (MQTT)</h3>
+        <select id="regionFilter" class="mobile-search-input" style="padding: 14px; cursor: pointer;">
+          <option value="">Alle regioner</option>
+          <option value="EU_868">🇪🇺 Europa (EU_868)</option>
+          <option value="US">🇺🇸 USA</option>
+          <option value="PL">🇵🇱 Polen</option>
+          <option value="CZ">🇨🇿 Tsjekkia</option>
+          <option value="TW">🇹🇼 Taiwan</option>
+          <option value="KR">🇰🇷 Sør-Korea</option>
+          <option value="TH">🇹🇭 Thailand</option>
+          <option value="BR">🇧🇷 Brasil</option>
+          <option value="MX">🇲🇽 Mexico</option>
+          <option value="msk">🇷🇺 Moskva</option>
+        </select>
+      </div>
+    </div>
   </div>
   
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
+    // ==================== MOBILE/TABLET DETECTION (DISABLED - DESKTOP ONLY) ====================
+    const isMobileDevice = () => {
+      // Always return false - desktop mode only
+      return {
+        mobile: false,
+        tablet: false,
+        touch: false,
+        smallScreen: false,
+        any: false
+      };
+    };
+    
+    // Desktop mode only - mobile UI disabled
+    const device = isMobileDevice();
+    console.log('�️ Desktop-only mode enforced');
+    
+    // Mobile menu initialization skipped in desktop-only mode
+    
+    // ==================== MOBILE MENU FUNCTIONS ====================
+    function initMobileMenu() {
+      const menuButton = document.getElementById('mobileMenuButton');
+      const menuOverlay = document.getElementById('mobileMenuOverlay');
+      const menuPanel = document.getElementById('mobileMenuPanel');
+      const mobileSearchInput = document.getElementById('mobileSearchInput');
+      const mobileLocationSearch = document.getElementById('mobileLocationSearch');
+      
+      // Toggle menu
+      function toggleMenu() {
+        const isActive = menuPanel.classList.contains('active');
+        
+        if (isActive) {
+          closeMenu();
+        } else {
+          openMenu();
+        }
+      }
+      
+      function openMenu() {
+        menuButton.classList.add('active');
+        menuOverlay.classList.add('active');
+        menuPanel.classList.add('active');
+        document.body.style.overflow = 'hidden'; // Prevent background scrolling
+      }
+      
+      function closeMenu() {
+        menuButton.classList.remove('active');
+        menuOverlay.classList.remove('active');
+        menuPanel.classList.remove('active');
+        document.body.style.overflow = ''; // Restore scrolling
+      }
+      
+      // Event listeners
+      menuButton.addEventListener('click', toggleMenu);
+      menuOverlay.addEventListener('click', closeMenu);
+      
+      // Sync mobile search with desktop search
+      mobileSearchInput.addEventListener('input', (e) => {
+        document.getElementById('searchInput').value = e.target.value;
+        document.getElementById('searchInput').dispatchEvent(new Event('input'));
+      });
+      
+      // Sync mobile location search with desktop
+      mobileLocationSearch.addEventListener('input', (e) => {
+        document.getElementById('locationSearch').value = e.target.value;
+        document.getElementById('locationSearch').dispatchEvent(new Event('input'));
+      });
+      
+      // Mobile favorites filter
+      const favButtons = ['mobileFavoritesAll', 'mobileFavoritesOnly', 'mobileFavoritesExclude'];
+      favButtons.forEach(id => {
+        const btn = document.getElementById(id);
+        btn.addEventListener('click', () => {
+          // Remove active from all
+          favButtons.forEach(btnId => {
+            const b = document.getElementById(btnId);
+            b.classList.remove('active');
+            b.querySelector('span:last-child').textContent = '';
+          });
+          
+          // Add active to clicked
+          btn.classList.add('active');
+          btn.querySelector('span:last-child').textContent = '✓';
+          
+          // Trigger corresponding desktop filter
+          const filter = btn.dataset.filter;
+          if (filter === 'all') {
+            document.getElementById('favoritesAll').checked = true;
+          } else if (filter === 'favorites') {
+            document.getElementById('favoritesOnly').checked = true;
+          } else if (filter === 'exclude') {
+            document.getElementById('favoritesExclude').checked = true;
+          }
+          
+          // Trigger change event
+          document.querySelector('input[name="favorites"]:checked').dispatchEvent(new Event('change'));
+        });
+      });
+      
+      // Mobile status filter
+      const statusButtons = ['mobileStatusAll', 'mobileStatusOnline', 'mobileStatusRecent', 'mobileStatusOffline'];
+      statusButtons.forEach(id => {
+        const btn = document.getElementById(id);
+        btn.addEventListener('click', () => {
+          // Remove active from all
+          statusButtons.forEach(btnId => {
+            const b = document.getElementById(btnId);
+            b.classList.remove('active');
+            b.querySelector('span:last-child').textContent = '';
+          });
+          
+          // Add active to clicked
+          btn.classList.add('active');
+          btn.querySelector('span:last-child').textContent = '✓';
+          
+          // Trigger corresponding desktop filter
+          const status = btn.dataset.status;
+          if (status === 'all') {
+            document.getElementById('statusAll').checked = true;
+          } else if (status === 'online') {
+            document.getElementById('statusOnline').checked = true;
+          } else if (status === 'recent') {
+            document.getElementById('statusRecent').checked = true;
+          } else if (status === 'offline') {
+            document.getElementById('statusOffline').checked = true;
+          }
+          
+          // Trigger change event
+          document.querySelector('input[name="status"]:checked').dispatchEvent(new Event('change'));
+        });
+      });
+      
+      // Mobile source checkboxes - now synced with left menu
+      const sourceRadio = document.getElementById('sourceRadio');
+      const sourceMQTT = document.getElementById('sourceMQTT');
+      
+      sourceRadio.addEventListener('change', () => {
+        document.getElementById('sourceRadio').checked = sourceRadio.checked;
+        document.getElementById('sourceRadio').dispatchEvent(new Event('change'));
+      });
+      
+      sourceMQTT.addEventListener('change', () => {
+        document.getElementById('sourceMQTT').checked = sourceMQTT.checked;
+        document.getElementById('sourceMQTT').dispatchEvent(new Event('change'));
+      });
+      
+      console.log('📱 Mobile menu initialized');
+    }
+    
+    // ==================== SOURCE MENU (LEFT SIDE) ====================
+    function initSourceMenu() {
+      const sourceButton = document.getElementById('sourceMenuButton');
+      const sourceOverlay = document.getElementById('sourceMenuOverlay');
+      const sourcePanel = document.getElementById('sourceMenuPanel');
+      
+      if (!sourceButton || !sourceOverlay || !sourcePanel) {
+        console.warn('⚠️ Source menu elements not found');
+        return;
+      }
+      
+      // Toggle menu
+      function toggleSourceMenu() {
+        const isActive = sourcePanel.classList.contains('active');
+        
+        if (isActive) {
+          closeSourceMenu();
+        } else {
+          openSourceMenu();
+        }
+      }
+      
+      function openSourceMenu() {
+        sourceButton.classList.add('active');
+        sourceOverlay.classList.add('active');
+        sourcePanel.classList.add('active');
+      }
+      
+      function closeSourceMenu() {
+        sourceButton.classList.remove('active');
+        sourceOverlay.classList.remove('active');
+        sourcePanel.classList.remove('active');
+      }
+      
+      // Event listeners
+      sourceButton.addEventListener('click', toggleSourceMenu);
+      sourceOverlay.addEventListener('click', closeSourceMenu);
+      
+      // Sync source checkboxes with desktop filters
+      const sourceRadio = document.getElementById('sourceRadio');
+      const sourceMQTT = document.getElementById('sourceMQTT');
+      const desktopRadio = document.getElementById('sourceRadio');
+      const desktopMQTT = document.getElementById('sourceMQTT');
+      
+      if (sourceRadio && desktopRadio) {
+        sourceRadio.addEventListener('change', () => {
+          desktopRadio.checked = sourceRadio.checked;
+          desktopRadio.dispatchEvent(new Event('change'));
+        });
+      }
+      
+      if (sourceMQTT && desktopMQTT) {
+        sourceMQTT.addEventListener('change', () => {
+          desktopMQTT.checked = sourceMQTT.checked;
+          desktopMQTT.dispatchEvent(new Event('change'));
+        });
+      }
+      
+      console.log('� Source menu initialized');
+    }
+    
+    // Initialize all menus if on mobile
+    if (device.any) {
+      initSourceMenu();
+      initStatusMenu();
+      initFavoritesMenu();
+    }
+    
+    // ==================== STATUS MENU (TOP RIGHT) ====================
+    function initStatusMenu() {
+      const statusButton = document.getElementById('statusMenuButton');
+      const statusOverlay = document.getElementById('statusMenuOverlay');
+      const statusPanel = document.getElementById('statusMenuPanel');
+      
+      if (!statusButton || !statusOverlay || !statusPanel) return;
+      
+      function toggleStatusMenu() {
+        const isActive = statusPanel.classList.contains('active');
+        if (isActive) {
+          statusButton.classList.remove('active');
+          statusOverlay.classList.remove('active');
+          statusPanel.classList.remove('active');
+        } else {
+          statusButton.classList.add('active');
+          statusOverlay.classList.add('active');
+          statusPanel.classList.add('active');
+        }
+      }
+      
+      statusButton.addEventListener('click', toggleStatusMenu);
+      statusOverlay.addEventListener('click', () => {
+        statusButton.classList.remove('active');
+        statusOverlay.classList.remove('active');
+        statusPanel.classList.remove('active');
+      });
+      
+      const statusButtons = ['mobileStatusAll', 'mobileStatusOnline', 'mobileStatusRecent', 'mobileStatusOffline'];
+      statusButtons.forEach(id => {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+        btn.addEventListener('click', () => {
+          statusButtons.forEach(btnId => {
+            const b = document.getElementById(btnId);
+            if (b) {
+              b.classList.remove('active');
+              const span = b.querySelector('span:last-child');
+              if (span) span.textContent = '';
+            }
+          });
+          
+          btn.classList.add('active');
+          const span = btn.querySelector('span:last-child');
+          if (span) span.textContent = '✓';
+          
+          const status = btn.dataset.status;
+          if (status === 'all') document.getElementById('statusAll').checked = true;
+          else if (status === 'online') document.getElementById('statusOnline').checked = true;
+          else if (status === 'recent') document.getElementById('statusRecent').checked = true;
+          else if (status === 'offline') document.getElementById('statusOffline').checked = true;
+          
+          document.querySelector('input[name="status"]:checked').dispatchEvent(new Event('change'));
+        });
+      });
+      
+      console.log('🔴🟡🟢 Status menu initialized');
+    }
+    
+    // ==================== FAVORITES MENU (BOTTOM LEFT) ====================
+    function initFavoritesMenu() {
+      const favButton = document.getElementById('favoritesMenuButton');
+      const favOverlay = document.getElementById('favoritesMenuOverlay');
+      const favPanel = document.getElementById('favoritesMenuPanel');
+      
+      if (!favButton || !favOverlay || !favPanel) return;
+      
+      function toggleFavoritesMenu() {
+        const isActive = favPanel.classList.contains('active');
+        if (isActive) {
+          favButton.classList.remove('active');
+          favOverlay.classList.remove('active');
+          favPanel.classList.remove('active');
+        } else {
+          favButton.classList.add('active');
+          favOverlay.classList.add('active');
+          favPanel.classList.add('active');
+        }
+      }
+      
+      favButton.addEventListener('click', toggleFavoritesMenu);
+      favOverlay.addEventListener('click', () => {
+        favButton.classList.remove('active');
+        favOverlay.classList.remove('active');
+        favPanel.classList.remove('active');
+      });
+      
+      const favButtons = ['mobileFavoritesAll', 'mobileFavoritesOnly', 'mobileFavoritesExclude'];
+      favButtons.forEach(id => {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+        btn.addEventListener('click', () => {
+          favButtons.forEach(btnId => {
+            const b = document.getElementById(btnId);
+            if (b) {
+              b.classList.remove('active');
+              const span = b.querySelector('span:last-child');
+              if (span) span.textContent = '';
+            }
+          });
+          
+          btn.classList.add('active');
+          const span = btn.querySelector('span:last-child');
+          if (span) span.textContent = '✓';
+          
+          const filter = btn.dataset.filter;
+          if (filter === 'all') document.getElementById('favoritesAll').checked = true;
+          else if (filter === 'favorites') document.getElementById('favoritesOnly').checked = true;
+          else if (filter === 'exclude') document.getElementById('favoritesExclude').checked = true;
+          
+          document.querySelector('input[name="favorites"]:checked').dispatchEvent(new Event('change'));
+        });
+      });
+      
+      console.log('⭐ Favorites menu initialized');
+    }
+    
+    // ==================== REGION FILTER MENU ====================
+    function initRegionFilter() {
+      const regionFilterEl = document.getElementById('regionFilter');
+      const desktopRegionFilterEl = document.getElementById('desktopRegionFilter');
+      
+      // Set initial value from localStorage
+      if (regionFilterEl) regionFilterEl.value = regionFilter;
+      if (desktopRegionFilterEl) desktopRegionFilterEl.value = regionFilter;
+      
+      // Mobile region filter
+      if (regionFilterEl) {
+        regionFilterEl.addEventListener('change', (e) => {
+          regionFilter = e.target.value;
+          localStorage.setItem('regionFilter', regionFilter);
+          console.log('🌍 Region filter set to:', regionFilter || 'All regions');
+          // Sync with desktop
+          if (desktopRegionFilterEl) desktopRegionFilterEl.value = regionFilter;
+          renderNodes();
+        });
+      }
+      
+      // Desktop region filter
+      if (desktopRegionFilterEl) {
+        desktopRegionFilterEl.addEventListener('change', (e) => {
+          regionFilter = e.target.value;
+          localStorage.setItem('regionFilter', regionFilter);
+          console.log('🌍 Desktop region filter set to:', regionFilter || 'All regions');
+          // Sync with mobile
+          if (regionFilterEl) regionFilterEl.value = regionFilter;
+          renderNodes();
+        });
+      }
+      
+      console.log('🌍 Region filter initialized with:', regionFilter || 'All regions');
+    }
+    
+    // ==================== VERSION CHECKING ====================
+    const APP_VERSION = '3.29.0';
+    // Version checking and notifications disabled per user request
+    
+    // Store current version on load
+    window.addEventListener('load', () => {
+      console.log('🚀 Meshtastic Map v' + APP_VERSION);
+    });
+    
     // ==================== CONFIGURATION ====================
     // API_KEY is injected by Flask from environment variable NODE_API_KEY
     const API_KEY = 'REPLACE_ME_WITH_ENV_VAR';
@@ -2201,10 +3560,35 @@
     let lastZoomedNode = null;  // Track which node was last zoomed to
     let liveUpdateInterval = null;  // Store interval ID for live updates
     
+    // Toggle favorite for the active overlay node
+    function toggleOverlayFavorite() {
+      if (!activePodNode) return;
+      
+      toggleFavorite(activePodNode);
+      
+      // Update button appearance
+      const btn = document.getElementById('overlayFavoriteButton');
+      const isFavorite = favorites.has(activePodNode);
+      btn.innerHTML = isFavorite ? '★' : '☆';
+      btn.className = 'overlay-favorite-button' + (isFavorite ? ' active' : '');
+      btn.title = isFavorite ? 'Fjern fra favoritter' : 'Legg til favoritt';
+    }
+    
+    // Make function globally accessible
+    window.toggleOverlayFavorite = toggleOverlayFavorite;
+    
     function showPodOverlay(nodeId, marker, props) {
       // Store active state
       activePodNode = nodeId;
       activeLabelElement = marker;
+      
+      // Update favorite button in overlay
+      const favBtn = document.getElementById('overlayFavoriteButton');
+      const isFavorite = favorites.has(nodeId);
+      favBtn.innerHTML = isFavorite ? '★' : '☆';
+      favBtn.className = 'overlay-favorite-button' + (isFavorite ? ' active' : '');
+      favBtn.title = isFavorite ? 'Fjern fra favoritter' : 'Legg til favoritt';
+      console.log('⭐ Overlay favorite button updated:', isFavorite ? 'active' : 'inactive');
       
       // Get marker position on screen
       const latlng = marker.getLatLng();
@@ -2379,13 +3763,17 @@
             `;
           }
         } else if (title.includes('Strøm')) {
-          // Update power data
-          if (props.batteryLevel || props.voltage || props.snr) {
+          // Update power data - filter out NaN values
+          const hasValidBattery = props.batteryLevel && !isNaN(props.batteryLevel);
+          const hasValidVoltage = props.voltage && !isNaN(props.voltage);
+          const hasValidSnr = props.snr && !isNaN(props.snr);
+          
+          if (hasValidBattery || hasValidVoltage || hasValidSnr) {
             const content = pod.querySelector('.pod-content');
             content.innerHTML = `
-              ${props.batteryLevel ? `<div>🔋 ${props.batteryLevel}%</div>` : ''}
-              ${props.voltage ? `<div>⚡ ${props.voltage.toFixed(2)}V</div>` : ''}
-              ${props.snr ? `<div>📶 SNR: ${props.snr.toFixed(1)} dB</div>` : ''}
+              ${hasValidBattery ? `<div>🔋 ${props.batteryLevel}%</div>` : ''}
+              ${hasValidVoltage ? `<div>⚡ ${props.voltage.toFixed(2)}V</div>` : ''}
+              ${hasValidSnr ? `<div>📶 SNR: ${props.snr.toFixed(1)} dB</div>` : ''}
             `;
           }
         } else if (title.includes('Nettverk')) {
@@ -2616,18 +4004,22 @@
         podIndex++;
       }
       
-      // Power Pod
+      // Power Pod - Filter out NaN values
       if (hasPower) {
         const angle = podIndex * angleStep - 90;
         const x = centerX + radius * Math.cos(angle * Math.PI / 180);
         const y = centerY + radius * Math.sin(angle * Math.PI / 180);
+        const validBattery = props.batteryLevel && !isNaN(props.batteryLevel);
+        const validVoltage = props.voltage && !isNaN(props.voltage);
+        const validSnr = props.snr && !isNaN(props.snr);
+        
         pods.push(`
           <div class="map-data-pod power" style="left: ${x}px; top: ${y}px; transform: translate(-50%, -50%);">
             <div class="pod-title">🔋 Kraft</div>
             <div class="pod-content">
-              ${props.batteryLevel ? `<div><strong>Batteri:</strong> ${props.batteryLevel}%</div>` : ''}
-              ${props.voltage ? `<div><strong>Spenning:</strong> ${props.voltage.toFixed(2)}V</div>` : ''}
-              ${props.snr ? `<div><strong>SNR:</strong> ${props.snr} dB</div>` : ''}
+              ${validBattery ? `<div><strong>Batteri:</strong> ${props.batteryLevel}%</div>` : ''}
+              ${validVoltage ? `<div><strong>Spenning:</strong> ${props.voltage.toFixed(2)}V</div>` : ''}
+              ${validSnr ? `<div><strong>SNR:</strong> ${props.snr} dB</div>` : ''}
             </div>
           </div>
         `);
@@ -2712,11 +4104,15 @@
     let favorites = new Set();
     let activeFilter = null;
     let isFirstLoad = true;
-    // Source filters - Radio (USB/WiFi) and MQTT
+    // Source filters - Radio (USB/WiFi) and MQTT - Load from localStorage
     let sourceFilters = {
-      radio: true,
-      mqtt: true
+      radio: localStorage.getItem('sourceFilterRadio') !== 'false', // default true
+      mqtt: localStorage.getItem('sourceFilterMQTT') !== 'false'    // default true
     };
+    // Location filter
+    // Region filter (MQTT topic-based) - Load from localStorage
+    let regionFilter = localStorage.getItem('regionFilter') || '';
+    
     // Auto-refresh and live update state
     let autoRefreshInterval = null;
     let isEditingNode = false;
@@ -3387,24 +4783,19 @@
     }
     
     function loadNodes() {
+      console.log('🔄 Loading nodes from API...');
       fetch(`/nodes.geojson?_=${Date.now()}`)
         .then(r => r.json())
         .then(data => {
-          console.log('Loaded nodes:', data.features.length);
+          console.log('✅ Loaded nodes:', data.features.length);
           allNodes = data.features;
+          console.log('📍 Calling renderNodes()...');
           renderNodes();
-          // updateStatistics() removed - sidebar elements no longer exist
-          
-          // Auto-zoom to show all nodes ONLY on first load
-          if (isFirstLoad && allNodes.length > 0 && nodesLayer.getLayers().length > 0) {
-            const bounds = nodesLayer.getBounds();
-            if (bounds.isValid()) {
-              map.fitBounds(bounds, { padding: [50, 50] });
-              isFirstLoad = false; // Disable auto-zoom after first load
-            }
-          }
+          // Update favorites bar after nodes are loaded
+          updateFavoritesBar();
+          // Auto-zoom happens in renderNodes() on first render
         })
-        .catch(err => console.error('Error loading nodes:', err));
+        .catch(err => console.error('❌ Error loading nodes:', err));
     }
     
     // Function to check if two positions are within clustering distance
@@ -3459,9 +4850,11 @@
     function renderNodes() {
       // Guard: Don't render if no nodes loaded yet
       if (!allNodes || allNodes.length === 0) {
-        console.log('No nodes loaded yet');
+        console.log('⚠️ No nodes loaded yet');
         return;
       }
+      
+      console.log(`🎨 Rendering ${allNodes.length} nodes...`);
       
       const searchTerm = document.getElementById('searchInput').value.toLowerCase();
       
@@ -3484,11 +4877,33 @@
         // Check both server favorites and local favorites
         const isFav = props.isFavorite || favorites.has(props.nodeId);
         
-        // Count by status
-        if (isFav) counts.favorite++;
-        if (props.status === 'online') counts.online++;
-        else if (props.status === 'recent') counts.recent++;
-        else counts.offline++;
+        // Apply region filter
+        if (regionFilter) {
+          const sourceInterface = props.source_interface || '';
+          const dataSource = (props.source || 'radio').toLowerCase();
+          const nodeRegion = props.region; // From database (for radio nodes with detected region)
+          
+          // Check region from multiple sources:
+          // 1. For nodes with explicit region field (future: from device config)
+          if (nodeRegion && nodeRegion.toUpperCase() === regionFilter.toUpperCase()) {
+            // Match! Continue to next filter
+          }
+          // 2. For MQTT nodes: check source_interface
+          else if (dataSource === 'mqtt') {
+            if (!sourceInterface.includes(`/${regionFilter}/`) && !sourceInterface.includes(`/${regionFilter.toUpperCase()}/`)) {
+              return; // Filter out
+            }
+          }
+          // 3. For radio nodes without region: show them (local nodes, region unknown)
+          else if (dataSource === 'radio' && !nodeRegion) {
+            // Always show local radio nodes when filtering
+            // In the future we'll detect region from device config
+          }
+          // 4. Node has region but doesn't match filter
+          else if (nodeRegion) {
+            return; // Filter out
+          }
+        }
         
         // Apply source filter based on 'source' field (radio or mqtt)
         const dataSource = (props.source || 'radio').toLowerCase(); // 'source' column from database
@@ -3501,6 +4916,12 @@
         // Apply status filter
         if (activeFilter === 'favorite' && !isFav) return;
         if (activeFilter && activeFilter !== 'favorite' && props.status !== activeFilter) return;
+        
+        // Count by status (AFTER filters are applied)
+        if (isFav) counts.favorite++;
+        if (props.status === 'online') counts.online++;
+        else if (props.status === 'recent') counts.recent++;
+        else counts.offline++;
         
         // Apply search
         const searchable = [
@@ -3538,11 +4959,11 @@
           const props = ff.props;
           const isFav = ff.isFav;
           
-          // Determine status color
-          let statusColor = '#666';  // offline
-          if (isFav) statusColor = '#FFD700';  // gold for favorites
-          else if (props.status === 'online') statusColor = '#4CAF50';  // green
+          // Determine status color (favorites use same colors as non-favorites)
+          let statusColor = '#666';  // offline default
+          if (props.status === 'online') statusColor = '#4CAF50';  // green
           else if (props.status === 'recent') statusColor = '#FF9800';  // orange
+          else statusColor = '#666';  // grey for offline
           
           // Calculate vertical offset for stacked nodes (only for true overlapping nodes)
           const isOverlapping = clusterFeatures.length > 1;
@@ -3553,8 +4974,8 @@
           
           const circleMarker = L.circleMarker([labelLat, labelLon], {
             radius: 8,
-            fillColor: statusColor,
-            color: '#fff',
+            fillColor: statusColor,  // Status color (green/orange/gray)
+            color: '#fff',            // White ring
             weight: 2,
             opacity: 1,
             fillOpacity: 0.8
@@ -3610,9 +5031,66 @@
         emptyState.classList.add('hidden');
       }
       
-      // Auto-zoom disabled to prevent unwanted map movements when editing
-      // Users can manually zoom or use Reset View button
+      // Auto-zoom to fit all visible nodes
+      const shouldAutoZoom = !window.hasAutoZoomed || (searchTerm && searchTerm.length > 0);
+      
+      console.log('🔎 Zoom check:', {
+        hasAutoZoomed: window.hasAutoZoomed,
+        searchTerm: searchTerm,
+        displayed: displayed,
+        filteredCount: filteredFeatures.length,
+        shouldAutoZoom: shouldAutoZoom
+      });
+      
+      if (shouldAutoZoom && displayed > 0 && filteredFeatures.length > 0) {
+        console.log('🔍 Auto-zooming to fit', displayed, 'displayed nodes (search:', searchTerm || 'none', ')');
+        fitMapToNodes(filteredFeatures.map(ff => ff.feature));
+        
+        // Mark as zoomed only if it's the initial load (not a search)
+        if (!searchTerm || searchTerm.length === 0) {
+          window.hasAutoZoomed = true;
+          console.log('✓ Marked hasAutoZoomed = true');
+        }
+      }
     }
+    
+    // Fit map to show all nodes with minimal padding
+    function fitMapToNodes(features) {
+      if (!features || features.length === 0) return;
+      
+      // Create bounds from all node coordinates (only valid GPS coordinates)
+      const bounds = L.latLngBounds();
+      let validNodes = 0;
+      
+      features.forEach(f => {
+        const lat = f.geometry.coordinates[1];
+        const lon = f.geometry.coordinates[0];
+        
+        // Only include nodes with valid GPS coordinates
+        // Skip nodes at 0,0 or with missing coordinates
+        if (lat && lon && (lat !== 0 || lon !== 0)) {
+          bounds.extend([lat, lon]);
+          validNodes++;
+        }
+      });
+      
+      // Only zoom if we have valid nodes
+      if (validNodes > 0 && bounds.isValid()) {
+        const padding = device.any ? [20, 20] : [30, 30]; // Minimal padding
+        map.fitBounds(bounds, {
+          padding: padding,
+          maxZoom: 16, // Allow closer zoom
+          animate: true,
+          duration: 0.8
+        });
+        console.log('✓ Zoomed to', validNodes, 'nodes with GPS. Bounds:', bounds.toBBoxString());
+      } else {
+        console.log('⚠️ No valid GPS coordinates to zoom to');
+      }
+    }
+    
+    // Make fitMapToNodes globally accessible
+    window.fitMapToNodes = fitMapToNodes;
     
     // Toggle favorite function (called from popup button)
     function toggleFavorite(nodeId) {
@@ -3637,10 +5115,65 @@
     // toggleNodeTrail() removed - will be re-implemented with historical GPS data from database
     
     // Dim map when popup opens
-    map.on('popupopen', function() {
+    map.on('popupopen', function(e) {
       // Dim all map layers except popup
       document.querySelector('.leaflet-tile-pane').classList.add('map-dimmed');
       document.querySelector('.leaflet-overlay-pane').classList.add('map-dimmed');
+      
+      // Add favorite button to popup if not already present
+      const popup = e.popup;
+      const popupContainer = popup._container;
+      
+      console.log('🌟 Popup opened, adding favorite button...');
+      
+      if (popupContainer && !popupContainer.querySelector('.leaflet-popup-favorite-button')) {
+        // Extract nodeId from popup content
+        const content = popup.getContent();
+        const nodeIdMatch = content.match(/nodeId['"]\s*:\s*['"]([^'"]+)['"]/);
+        const nodeId = nodeIdMatch ? nodeIdMatch[1] : null;
+        
+        console.log('🔍 NodeId extracted:', nodeId);
+        
+        if (nodeId) {
+          const isFavorite = favorites.has(nodeId);
+          
+          // Create favorite button
+          const favBtn = document.createElement('a');
+          favBtn.className = 'leaflet-popup-favorite-button' + (isFavorite ? ' active' : '');
+          favBtn.href = '#';
+          favBtn.innerHTML = isFavorite ? '★' : '☆';
+          favBtn.title = isFavorite ? 'Fjern fra favoritter' : 'Legg til favoritt';
+          favBtn.setAttribute('data-node-id', nodeId);
+          
+          console.log('⭐ Favorite button created:', isFavorite ? 'active' : 'inactive');
+          
+          // Add click handler
+          favBtn.onclick = function(evt) {
+            evt.preventDefault();
+            evt.stopPropagation();
+            toggleFavorite(nodeId);
+            
+            // Update button appearance
+            const isNowFavorite = favorites.has(nodeId);
+            favBtn.innerHTML = isNowFavorite ? '★' : '☆';
+            favBtn.title = isNowFavorite ? 'Fjern fra favoritter' : 'Legg til favoritt';
+            favBtn.className = 'leaflet-popup-favorite-button' + (isNowFavorite ? ' active' : '');
+          };
+          
+          // Insert into popup content wrapper
+          const contentWrapper = popupContainer.querySelector('.leaflet-popup-content-wrapper');
+          if (contentWrapper) {
+            contentWrapper.appendChild(favBtn);
+            console.log('✅ Favorite button added to popup');
+          } else {
+            console.error('❌ Could not find content wrapper');
+          }
+        } else {
+          console.warn('⚠️ Could not extract nodeId from popup');
+        }
+      } else {
+        console.log('ℹ️ Favorite button already exists or container not found');
+      }
     });
     
     // Remove dimming when popup closes
@@ -3670,26 +5203,184 @@
     // Source filter checkboxes
     document.getElementById('sourceRadio').addEventListener('change', (e) => {
       sourceFilters.radio = e.target.checked;
+      localStorage.setItem('sourceFilterRadio', e.target.checked);
       console.log('Source filters:', sourceFilters);
       renderNodes();
     });
     
     document.getElementById('sourceMQTT').addEventListener('change', (e) => {
       sourceFilters.mqtt = e.target.checked;
+      localStorage.setItem('sourceFilterMQTT', e.target.checked);
       console.log('Source filters:', sourceFilters);
       renderNodes();
     });
     
+    // Location search functionality (DISABLED - using region filter instead)
+    const locationSearchEl = document.getElementById('locationSearch');
+    if (locationSearchEl) {
+      locationSearchEl.addEventListener('input', async (e) => {
+        const query = e.target.value.trim();
+        
+        if (locationSearchTimeout) {
+          clearTimeout(locationSearchTimeout);
+        }
+        
+        if (query.length < 3) {
+          document.getElementById('locationSuggestions').style.display = 'none';
+          return;
+        }
+        
+        locationSearchTimeout = setTimeout(async () => {
+          try {
+            // Use Nominatim API for geocoding
+            const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`);
+            const results = await response.json();
+            
+            if (results.length > 0) {
+              showLocationSuggestions(results);
+            } else {
+              document.getElementById('locationSuggestions').style.display = 'none';
+            }
+          } catch (error) {
+            console.error('Location search error:', error);
+          }
+        }, 500);
+      });
+    }
+    
+    // Clear location filter
+    const clearLocationBtn = document.getElementById('clearLocation');
+    if (clearLocationBtn) {
+      clearLocationBtn.addEventListener('click', () => {
+        locationFilter.active = false;
+        locationFilter.bounds = null;
+        locationFilter.name = null;
+        const locSearchEl = document.getElementById('locationSearch');
+        const locSuggestEl = document.getElementById('locationSuggestions');
+        if (locSearchEl) locSearchEl.value = '';
+        if (clearLocationBtn) clearLocationBtn.style.display = 'none';
+        if (locSuggestEl) locSuggestEl.style.display = 'none';
+        renderNodes();
+        
+        // Reset zoom to show all nodes
+        if (allNodes.length > 0 && nodesLayer.getLayers().length > 0) {
+          const bounds = nodesLayer.getBounds();
+          if (bounds.isValid()) {
+            map.fitBounds(bounds, { padding: [50, 50] });
+          }
+        }
+      });
+    }
+    
+    // Hide suggestions when clicking outside (only if elements exist)
+    document.addEventListener('click', (e) => {
+      const locSuggestEl = document.getElementById('locationSuggestions');
+      if (locSuggestEl && !e.target.closest('#locationSearch') && !e.target.closest('#locationSuggestions')) {
+        locSuggestEl.style.display = 'none';
+      }
+    });
+    
+    function showLocationSuggestions(results) {
+      const container = document.getElementById('locationSuggestions');
+      container.innerHTML = '';
+      
+      results.forEach(result => {
+        const div = document.createElement('div');
+        div.className = 'location-suggestion';
+        
+        const name = document.createElement('div');
+        name.className = 'location-name';
+        name.textContent = result.name || result.display_name.split(',')[0];
+        
+        const details = document.createElement('div');
+        details.className = 'location-details';
+        const parts = result.display_name.split(',').slice(1, 3);
+        details.textContent = parts.join(',');
+        
+        div.appendChild(name);
+        div.appendChild(details);
+        
+        div.addEventListener('click', () => selectLocation(result));
+        container.appendChild(div);
+      });
+      
+      container.style.display = 'block';
+    }
+    
+    function selectLocation(location) {
+      // Set location filter
+      locationFilter.active = true;
+      locationFilter.name = location.display_name;
+      
+      const lat = parseFloat(location.lat);
+      const lon = parseFloat(location.lon);
+      
+      console.log('Selected location:', location.display_name);
+      console.log('Raw boundingbox from Nominatim:', location.boundingbox);
+      
+      // Use actual bounding box from Nominatim if available
+      if (location.boundingbox && location.boundingbox.length === 4) {
+        // boundingbox format: [south, north, west, east] (min_lat, max_lat, min_lon, max_lon)
+        const south = parseFloat(location.boundingbox[0]);
+        const north = parseFloat(location.boundingbox[1]);
+        const west = parseFloat(location.boundingbox[2]);
+        const east = parseFloat(location.boundingbox[3]);
+        
+        locationFilter.bounds = {
+          south: south,
+          north: north,
+          west: west,
+          east: east
+        };
+        
+        console.log('Location bounds set to:', locationFilter.bounds);
+        console.log('Latitude range:', south, 'to', north, '(', (north - south).toFixed(2), '° span)');
+        console.log('Longitude range:', west, 'to', east, '(', (east - west).toFixed(2), '° span)');
+      } else {
+        // Fallback: Create bounds with some padding (about 50km radius)
+        const latPadding = 0.5; // ~50km
+        const lonPadding = 0.5;
+        
+        locationFilter.bounds = {
+          north: lat + latPadding,
+          south: lat - latPadding,
+          east: lon + lonPadding,
+          west: lon - lonPadding
+        };
+        console.log('Using fallback bounds (no boundingbox in API):', locationFilter.bounds);
+      }
+      
+      // Update UI
+      document.getElementById('locationSearch').value = location.name || location.display_name.split(',')[0];
+      document.getElementById('clearLocation').style.display = 'block';
+      document.getElementById('locationSuggestions').style.display = 'none';
+      
+      // Filter and zoom
+      renderNodes();
+      
+      // Zoom to location with appropriate level based on bounds size
+      const boundsSize = locationFilter.bounds.north - locationFilter.bounds.south;
+      const zoomLevel = boundsSize > 5 ? 5 : (boundsSize > 1 ? 8 : 10);
+      map.setView([lat, lon], zoomLevel);
+    }
+    
     // Note: Filter badge click handlers now handled by dropdown system above
     // Reset button removed - use "Alle" in status dropdown instead
+    
+    // Set checkbox initial state from localStorage
+    document.getElementById('sourceRadio').checked = sourceFilters.radio;
+    document.getElementById('sourceMQTT').checked = sourceFilters.mqtt;
+    
+    // Initialize region filter
+    initRegionFilter();
     
     // Initial load and refresh
     loadFavorites();
     loadNodes();
     // loadTrails() removed - will be re-implemented with historical GPS data
     
-    // Start auto-refresh
-    startAutoRefresh();
+    // Auto-refresh disabled per user request
+    // startAutoRefresh();
     
     // Handle orientation changes on mobile
     window.addEventListener('orientationchange', () => {
@@ -5195,11 +6886,9 @@
     function createNodeMarker(lat, lon, props) {
       const isFav = favorites.has(props.nodeId);
       
-      // Determine color based on status
+      // Determine color based on status (NOT favorite status)
       let color = '#999999';  // Default grey for unknown/offline
-      if (isFav) {
-        color = '#3388ff';  // Blue for favorites
-      } else if (props.status === 'online') {
+      if (props.status === 'online') {
         color = '#4CAF50';  // Green for online
       } else if (props.status === 'recent') {
         color = '#FFA726';  // Orange/yellow for recent
@@ -5217,22 +6906,26 @@
       // Font is 12px, average character width ~7-8px, need diameter to fit text
       const textWidth = labelText.length * 8;  // Increased from 7 to 8px per char
       const padding = 16;  // Extra padding for better fit
-      const minRadius = Math.max((textWidth + padding) / 2, isFav ? 8 : (isLocal ? 7 : 6));
+      const minRadius = Math.max((textWidth + padding) / 2, isLocal ? 7 : 6);
       const calculatedRadius = Math.ceil(minRadius);
+      
+      // Ring color based on source (black for local, white for MQTT)
+      const ringColor = isLocal ? '#000' : '#fff';
+      const ringWeight = isLocal ? 2.5 : 1.5;
       
       const marker = L.circleMarker([lat, lon], {
         radius: calculatedRadius,
-        fillColor: color,
-        color: isLocal ? '#000' : '#fff',  // Black ring for local, white for MQTT
-        weight: isLocal ? 2.5 : 1.5,
+        fillColor: color,  // Status color (green/orange/gray)
+        color: ringColor,   // Black for local, white for MQTT
+        weight: ringWeight,
         opacity: 1,
         fillOpacity: isLocal ? 0.9 : 0.7
       });
       
       // Add permanent label (reusing labelText from above)
       let labelClass = 'node-label';
-      if (isFav) labelClass += ' favorite';
-      else if (props.status === 'online') labelClass += ' online';
+      // Always use status class, even for favorites
+      if (props.status === 'online') labelClass += ' online';
       else if (props.status === 'recent') labelClass += ' recent';
       else labelClass += ' offline';
       
