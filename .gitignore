@@ -1,5 +1,8 @@
 # Secrets and credentials
-secrets/
+secrets/production.env
+secrets/backups/
+secrets/*.tar.gz
+secrets/mqtt.conf
 meshtracking_secrets/
 *.env
 production.env
